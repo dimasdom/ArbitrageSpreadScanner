@@ -1,0 +1,25 @@
+services:
+  arbitragebusiness:
+    image: arbitrage-scanner:latest
+    build:
+      context: .
+      dockerfile: ArbitrageBusiness/Dockerfile
+    restart: unless-stopped
+    environment:
+      - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
