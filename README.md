@@ -236,6 +236,9 @@ Exchanges in `WeakExchangeList` are treated as less reliable venues. The engine 
 | Microsoft.Extensions.Hosting | `BackgroundService` host, dependency injection, configuration |
 | EPPlus | Excel export support for opportunity data |
 | Azure.Storage.Blobs | Optional blob storage for export artefacts |
+| OpenTelemetry SDK | Distributed tracing (HTTP client, RabbitMQ, MongoDB spans) |
+| OpenTelemetry.Exporter.OpenTelemetryProtocol | OTLP gRPC export of traces to Grafana Tempo |
+| OpenTelemetry.Exporter.Prometheus.HttpListener | Standalone `/metrics` HTTP server on port 8085 for Prometheus scraping |
 
 ---
 
@@ -245,6 +248,9 @@ Configuration lives in `ArbitrageScanner.Worker/appsettings.json` under the `Arb
 
 ```json
 {
+  "OpenTelemetry": {
+    "Endpoint": "http://localhost:4317"
+  },
   "Arbitrage": {
     "SpreadSize": 1.0,
     "PositionSize": 600,
@@ -292,6 +298,7 @@ Environment variables override the corresponding `appsettings.json` values. Use 
 | `RABBITMQ_HOST` | Yes | Hostname or IP of the RabbitMQ broker. Used when constructing the AMQP connection. |
 | `TELEGRAM_TOKEN` | No | Overrides `Arbitrage.TelegramToken` from appsettings. |
 | `TELEGRAM_CHAT_ID` | No | Overrides `Arbitrage.ChatId` from appsettings. |
+| `OpenTelemetry__Endpoint` | No | OTLP gRPC endpoint for Grafana Tempo (e.g. `http://tempo:4317`). Defaults to `http://localhost:4317` from `appsettings.json`. |
 | `NODE_TOTAL` | No | Total number of scanner instances in a sharded deployment. Defaults to `1` (no sharding). See [Multi-Node Sharding](#multi-node-sharding). |
 | `NODE_INDEX` | No | Zero-based index of this instance in a sharded deployment. Must be in the range `0..NODE_TOTAL-1`. |
 | `Arbitrage__SpreadSize` | No | Overrides `Arbitrage.SpreadSize`. |
@@ -392,9 +399,12 @@ services:
       context: ArbitrageScanner/
       dockerfile: ArbitrageScanner.Worker/Dockerfile
     restart: unless-stopped
+    ports:
+      - "8086:8085"   # Prometheus metrics scrape endpoint
     environment:
       - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
       - RABBITMQ_HOST=rabbitmq
+      - OpenTelemetry__Endpoint=http://tempo:4317
     depends_on:
       rabbitmq:
         condition: service_healthy
