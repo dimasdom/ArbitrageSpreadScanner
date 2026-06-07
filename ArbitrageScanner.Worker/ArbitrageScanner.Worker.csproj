@@ -12,12 +12,18 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.HttpListener" Version="1.15.3-beta.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../ArbitrageScanner.Infrastructure/ArbitrageScanner.Infrastructure.csproj" />
     <ProjectReference Include="../ArbitrageScanner.Futures/ArbitrageScanner.Futures.csproj" />
     <ProjectReference Include="../ArbitrageScanner.Funding/ArbitrageScanner.Funding.csproj" />
+    <ProjectReference Include="../ArbitrageScanner.Spot/ArbitrageScanner.Spot.csproj" />
   </ItemGroup>
 
   <ItemGroup>

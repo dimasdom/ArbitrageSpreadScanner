@@ -9,6 +9,9 @@ using ArbitrageScanner.Funding.Services;
 using ArbitrageScanner.Spot.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
 
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
@@ -31,6 +34,21 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ArbitrageStrategyOrchestrator>();
         services.AddSingleton<ArbitrageService>();
         services.AddHostedService<ArbitrageWorker>();
+
+        services.AddOpenTelemetry()
+            .ConfigureResource(r => r.AddService("arbiscanner-arbitrage-scanner", serviceVersion: "1.0.0"))
+            .WithTracing(tracing => tracing
+                .AddHttpClientInstrumentation(o => o.RecordException = true)
+                .AddSource("RabbitMQ.Client.*")
+                .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
+                .AddOtlpExporter())
+            .WithMetrics(metrics => metrics
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddPrometheusHttpListener(o =>
+                {
+                    o.UriPrefixes = ["http://+:8085/"];
+                }));
     })
     .Build();
 
