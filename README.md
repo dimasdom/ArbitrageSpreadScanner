@@ -21,6 +21,7 @@ The core arbitrage detection engine of the ArbiScanner platform. It runs as a .N
 - [Multi-Node Sharding](#multi-node-sharding)
 - [Docker](#docker)
 - [Local Development](#local-development)
+- [Testing](#testing)
 - [Project Structure](#project-structure)
 
 ---
@@ -50,7 +51,7 @@ The detection loop follows these steps on every cycle:
 
 4. **Strategy calculation.** Each calculator inspects the `CoinDataModel` for its exchange and compares prices, funding rates, or spot-futures relationships across all available venues. When the spread exceeds the configured minimum, a `TradeOpportunityModel` is created and stored in the in-memory watch list (`StrategyWatchListService`).
 
-5. **Observer monitoring.** Three observer services run concurrently and watch open positions. When a spread falls below `KeepWatchingSpread`%, the position is considered closed: the final result is persisted to the MongoDB `SpreadsTicker` collection and a protobuf-serialised `TradeOpportunityModel` is published to the RabbitMQ fanout exchange.
+5. **Observer monitoring.** Three observer services run concurrently and watch open positions. Each tick, every open position's combine key is dispatched to its own fire-and-forget re-check task (bounded by a `SemaphoreSlim(5, 5)`) instead of the loop awaiting the whole watchlist as one batch; a `ConcurrentDictionary<string, byte>` of in-flight keys prevents a position from being scheduled twice while its previous re-check is still running. This means one slow or stuck (exchange, symbol) lookup no longer stalls re-checks of the rest of the watchlist on the next tick. When a spread falls below `KeepWatchingSpread`%, the position is considered closed: the final result is persisted to the MongoDB `SpreadsTicker` collection and a protobuf-serialised `TradeOpportunityModel` is published to the RabbitMQ fanout exchange. If the re-check can't produce a valid result (e.g. a funding rate or ticker fetch failed), the observer leaves the position in the watch list rather than publishing a partially-populated update.
 
 6. **Downstream consumption.** The Web API and Telegram Notifier subscribe to RabbitMQ and receive completed opportunity events in real time.
 
@@ -133,7 +134,7 @@ Concrete implementations of all domain interfaces plus supporting services.
 | Class | Responsibility |
 |---|---|
 | `ExchangeService` | Wraps a ccxt exchange instance; loads swap/spot markets; fetches tickers, order books, and funding rates; calculates available liquidity |
-| `ExchangePairService` | Abstract base for cross-exchange pair analysis; provides static liquidity calculation, `RoundToStep`, and `GetVolatilityForSymbol` |
+| `ExchangePairService` | Abstract base for cross-exchange pair analysis; provides static liquidity calculation and `RoundToStep` |
 | `ExchangeRegistry` | Thread-safe concurrent registry of all initialised exchange instances and their loaded markets |
 | `DataService` | Central singleton data hub: exchange maps, per-strategy watch lists, proxy pool, MongoDB queries |
 | `MongoService` | MongoDB CRUD operations for spreads, tickers, errors, proxies, and active positions |
@@ -454,10 +455,50 @@ cd ArbitrageScanner
 dotnet build ArbitrageScanner.sln
 ```
 
-### Running tests (if present)
+### Running tests
 
 ```bash
 dotnet test ArbitrageScanner.sln
+```
+
+See [Testing](#testing) for what each test project covers and how to run them in isolation.
+
+---
+
+## Testing
+
+Two dedicated test projects were added alongside the strategy/observer refactor described above.
+
+### ArbitrageScanner.Tests (unit)
+
+Pure unit tests (xUnit + FluentAssertions) covering the calculation and formatting logic shared by the three strategies — no MongoDB, RabbitMQ, or network calls:
+
+| File | Coverage |
+|---|---|
+| `SpreadCalculationTests` | Futures/spot spread percentage math, basis (mark vs. index) calculation |
+| `SlippageCalculationTests` | Order-book walking to fill a target size, weighted-average fill price, empty/insufficient-liquidity error paths |
+| `FundingCalculationTests` | Funding rate differential and long/short side selection |
+| `FormatOrdersToSendTests` | Mapping raw order book levels into the ask/bid lists attached to a `TradeOpportunityModel` |
+| `IntervalParsingTests` | `FundingObserverService.ParseInterval` (funding interval strings like `8h`, `4h30m`) and `GetNextPayoutUtc` boundary calculation |
+| `DeepCloneTests` | Deep-clone correctness for `TradeOpportunityModel`, including independence of nested `ExchangeRateModel` lists |
+
+`FundingObserverService.ParseInterval` is `internal`; `ArbitrageScanner.Funding.csproj` grants `ArbitrageScanner.Tests` access via `InternalsVisibleTo` so it can be unit tested without making it part of the public API.
+
+```bash
+dotnet test ArbitrageScanner.Tests/ArbitrageScanner.Tests.csproj
+```
+
+### ArbitrageScanner.IntegrationTests
+
+Testcontainers-backed tests that exercise the real MongoDB and RabbitMQ integration paths. **Docker must be running locally** — each test class spins up disposable containers via a shared fixture.
+
+| File | Coverage |
+|---|---|
+| `Mongo/TradeOpportunityRepositoryMongoTests` | Round-trips found spreads, spread tickers, spot spreads/tickers, funding spreads, error logs, and proxy documents through the real Mongo driver against a `Testcontainers.MongoDb` instance |
+| `RabbitMq/SpreadFanoutContractTests` | Publishes a `TradeOpportunityModel` to the fanout exchange and asserts it is delivered to both the `spread_api` and `spread_telegram` queues, and that all protobuf fields round-trip faithfully — guards the exact contract the Web API and Telegram Notifier depend on |
+
+```bash
+dotnet test ArbitrageScanner.IntegrationTests/ArbitrageScanner.IntegrationTests.csproj
 ```
 
 ---
@@ -523,6 +564,30 @@ ArbitrageScanner/
 │   ├── ArbitrageService.cs
 │   ├── Program.cs
 │   ├── appsettings.json
+│   ├── launchSettings.json     # Docker Compose launch profile (Visual Studio)
 │   └── Dockerfile
+├── ArbitrageScanner.Tests/              # Unit tests — see Testing
+│   ├── DeepCloneTests.cs
+│   ├── FormatOrdersToSendTests.cs
+│   ├── FundingCalculationTests.cs
+│   ├── IntervalParsingTests.cs
+│   ├── SlippageCalculationTests.cs
+│   ├── SpreadCalculationTests.cs
+│   └── Helpers/
+│       ├── OrderBookBuilder.cs
+│       └── ServiceFactory.cs
+├── ArbitrageScanner.IntegrationTests/    # Testcontainers-backed tests — see Testing
+│   ├── Fixtures/
+│   │   ├── MongoTestFixture.cs
+│   │   └── RabbitMqTestFixture.cs
+│   ├── Mongo/
+│   │   └── TradeOpportunityRepositoryMongoTests.cs
+│   ├── RabbitMq/
+│   │   └── SpreadFanoutContractTests.cs
+│   └── Support/
+│       ├── Images.cs
+│       └── TradeOpportunityModelBuilder.cs
+├── skills/
+│   └── create-docker-compose.md
 └── ArbitrageScanner.sln
 ```
