@@ -3,6 +3,7 @@ using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Domain.Interfaces;
 using ArbitrageScanner.Domain.Models;
 using Microsoft.Extensions.Configuration;
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace ArbitrageScanner.Spot.Services
@@ -14,7 +15,8 @@ namespace ArbitrageScanner.Spot.Services
         private readonly SpotPositionCalculatorService _spotPositionCalculatorService;
         private readonly IServicesCommunicationService _servicesCommunicationService;
         private readonly UserInterfaceService _userInterfaceService;
-        private readonly SemaphoreSlim _semaphore = new(3, 3);
+        private readonly SemaphoreSlim _semaphore = new(5, 5);
+        private readonly ConcurrentDictionary<string, byte> _inFlightKeys = new();
 
         private const int WatchLoopDelayMs = 1000;
         private const int RetryDelaySeconds = 2;
@@ -77,15 +79,14 @@ namespace ArbitrageScanner.Spot.Services
             {
                 try
                 {
-                    if (_dataService.WatchListSpot.Any())
+                    // Dispatch each key independently instead of awaiting the whole batch: a single
+                    // slow/stuck item must not delay reprocessing of the rest of the watchlist on the
+                    // next tick. _inFlightKeys keeps a key from being scheduled twice while its
+                    // previous watch is still running.
+                    foreach (var (combineKey, model) in _dataService.WatchListSpot)
                     {
-                        var tasks = _dataService.WatchListSpot.Select(async x =>
-                        {
-                            await _semaphore.WaitAsync();
-                            try { await WatchPossibleSpotPositionWithCombineKey(x.Value); }
-                            finally { _semaphore.Release(); }
-                        });
-                        await Task.WhenAll(tasks);
+                        if (_inFlightKeys.TryAdd(combineKey, 0))
+                            _ = WatchQueuedPositionAsync(combineKey, model);
                     }
                     await Task.Delay(WatchLoopDelayMs);
                 }
@@ -95,6 +96,20 @@ namespace ArbitrageScanner.Spot.Services
                     Console.WriteLine(ex.Message);
                     await Task.Delay(TimeSpan.FromSeconds(RetryDelaySeconds));
                 }
+            }
+        }
+
+        private async Task WatchQueuedPositionAsync(string combineKey, TradeOpportunityModel model)
+        {
+            await _semaphore.WaitAsync();
+            try
+            {
+                await WatchPossibleSpotPositionWithCombineKey(model);
+            }
+            finally
+            {
+                _semaphore.Release();
+                _inFlightKeys.TryRemove(combineKey, out _);
             }
         }
 

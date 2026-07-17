@@ -74,28 +74,5 @@ namespace ArbitrageScanner.Infrastructure.Services
         {
             return Math.Floor(value / step) * step;
         }
-
-        public static async Task<double> GetVolatilityForSymbol(string symbol, string exchange, DataService dataService)
-        {
-            try
-            {
-                if (dataService.ExchangeServices[exchange].exchange?.has?.ContainsKey("fetchOHLCV") == true)
-                {
-                    var ohlcv = await dataService.ExchangeServices[exchange].exchange!.FetchOHLCV(symbol, "1m", limit2: 30);
-                    var closes = ohlcv.Select(c => c.close).Where(c => c.HasValue).Select(c => c!.Value).ToList();
-                    var avg = closes.Average();
-                    var variance = closes.Select(p => Math.Pow(p - avg, 2)).Average();
-                    var stdDev = Math.Sqrt(variance);
-                    var percentageVolatility = stdDev / avg * 100;
-                    return percentageVolatility;
-                }
-            }
-            catch (Exception ex)
-            {
-                dataService.LogErrorEntry(ex, symbol, "GetVolatilityForSymbol", exchange);
-            }
-
-            return -1;
-        }
     }
 }

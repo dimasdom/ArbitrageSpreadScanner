@@ -52,9 +52,6 @@ namespace ArbitrageScanner.Domain.Models
         [ProtoMember(5)]
         public ExchangeRateModel? ExchangeLong { get; set; }
 
-        [ProtoMember(6)]
-        public double Volatility { get; set; }
-
         [ProtoMember(7)]
         public double SummaryTarrif { get; set; }
 

@@ -47,14 +47,6 @@ namespace ArbitrageScanner.Futures.Services
                 }
                 coinData.ExchangeRates.RemoveAt(i);
             }
-            //if (tradeOpportunity != null)
-            //{
-            //    tradeOpportunity.Volatility = await ExchangeService.GetVolatilityForSymbol(coinData.Symbol, tradeOpportunity.ExchangeLong.Exchange);
-            //    if (tradeOpportunity.Volatility < 0)
-            //    {
-            //        tradeOpportunity.Volatility = await ExchangeService.GetVolatilityForSymbol(coinData.Symbol, tradeOpportunity.ExchangeLong.Exchange);
-            //    }
-            //}
             return possiblePositions;
         }
 
@@ -86,7 +78,7 @@ namespace ArbitrageScanner.Futures.Services
             var orderBookEntries = isLong ? orderBook.asks : orderBook.bids;
             if (orderBookEntries == null || orderBookEntries.Count == 0)
                 throw new Exception("Order book is empty!");
-            double bestPrice = orderBookEntries[0][0]; // Лучшая цена
+            double bestPrice = orderBookEntries[0][0];
             double filledAmount = 0;
             double totalCost = 0;
 
@@ -111,20 +103,19 @@ namespace ArbitrageScanner.Futures.Services
             return slippage;
         }
 
-        public async Task<TradeOpportunityModel> WatchPossiblePosition(TradeOpportunityModel tradeOpportunity)
+        public async Task<TradeOpportunityModel?> WatchPossiblePosition(TradeOpportunityModel tradeOpportunity)
         {
             var exchangeRateA = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateA!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeRateA!.Symbol, false, 30, onlyFutures: true);
             var exchangeRateB = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateB!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeRateA!.Symbol, false, 30, onlyFutures: true);
-            if (exchangeRateA is not null && exchangeRateB is not null)
-            {
-                var spread = CalculateSpreadFor(exchangeRateA.ExchangeRate, exchangeRateB.ExchangeRate);
-                tradeOpportunity.ExchangeRateA = exchangeRateA;
-                tradeOpportunity.ExchangeRateB = exchangeRateB;
-                tradeOpportunity.Spread = spread;
-                tradeOpportunity.ExchangeLong = spread < 0 ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
-                tradeOpportunity.ExchangeShort = spread > 0 ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
-                tradeOpportunity = (await CalculatePossibleProfit(tradeOpportunity)) ?? tradeOpportunity;
-            }
+            if (exchangeRateA is null || exchangeRateB is null)
+                return null;
+            var spread = CalculateSpreadFor(exchangeRateA.ExchangeRate, exchangeRateB.ExchangeRate);
+            tradeOpportunity.ExchangeRateA = exchangeRateA;
+            tradeOpportunity.ExchangeRateB = exchangeRateB;
+            tradeOpportunity.Spread = spread;
+            tradeOpportunity.ExchangeLong = spread < 0 ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
+            tradeOpportunity.ExchangeShort = spread > 0 ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
+            tradeOpportunity = (await CalculatePossibleProfit(tradeOpportunity)) ?? tradeOpportunity;
             return tradeOpportunity;
         }
     }

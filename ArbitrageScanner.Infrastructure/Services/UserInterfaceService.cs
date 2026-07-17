@@ -71,21 +71,6 @@ namespace ArbitrageScanner.Infrastructure.Services
         {
             try
             {
-                string riskLevel = "";
-                if (tradeOpportunity.Volatility > 0)
-                {
-                    riskLevel = $"Volatility(30m): {tradeOpportunity.Volatility.ToString("0.00")}%\nRisk Level - ";
-                    double volatilityRatio = Math.Abs(tradeOpportunity.Volatility / tradeOpportunity.Spread * 100);
-
-                    if (volatilityRatio <= 15)
-                        riskLevel += "Safe";
-                    else if (volatilityRatio <= 30)
-                        riskLevel += "Medium";
-                    else if (volatilityRatio <= 50)
-                        riskLevel += "Risky";
-                    else
-                        riskLevel += "Dangerous";
-                }
                 string fundingForLong = "";
                 string fundingForShort = "";
                 try
@@ -105,7 +90,7 @@ namespace ArbitrageScanner.Infrastructure.Services
                 {
                     _dataService.LogErrorEntry(ex, tradeOpportunity.ExchangeLong?.Symbol ?? "", "PostFoundSpreadToTelegram");
                 }
-                await _telegramNotifierService.SendMessageAsync($"Coin: {tradeOpportunity.ExchangeRateA?.Symbol}\nSpread: {tradeOpportunity.Spread.ToString("0.00")}%\nLong: {tradeOpportunity.ExchangeLong?.Exchange}({tradeOpportunity.ExchangeLong?.ExchangeRate}$)\nShort: {tradeOpportunity.ExchangeShort?.Exchange}({tradeOpportunity.ExchangeShort?.ExchangeRate}$)\nPosition volume: {_config.PositionSize}$\nSlippage {tradeOpportunity.ExchangeLong?.Exchange}: {tradeOpportunity.ExchangeLong?.SlippageShort.ToString("0.00")}%\nSlippage {tradeOpportunity.ExchangeShort?.Exchange}: {tradeOpportunity.ExchangeShort?.SlippageLong.ToString("0.00")}%\nVolumeAskLong:{tradeOpportunity.ExchangeLong?.VolumeAsk}\nVolumeBidLong:{tradeOpportunity.ExchangeLong?.VolumeBid}\n\nVolumeAskShort:{tradeOpportunity.ExchangeShort?.VolumeAsk}\nVolumeBidShort:{tradeOpportunity.ExchangeShort?.VolumeBid}\n{riskLevel}{fundingForLong}{fundingForShort}");
+                await _telegramNotifierService.SendMessageAsync($"Coin: {tradeOpportunity.ExchangeRateA?.Symbol}\nSpread: {tradeOpportunity.Spread.ToString("0.00")}%\nLong: {tradeOpportunity.ExchangeLong?.Exchange}({tradeOpportunity.ExchangeLong?.ExchangeRate}$)\nShort: {tradeOpportunity.ExchangeShort?.Exchange}({tradeOpportunity.ExchangeShort?.ExchangeRate}$)\nPosition volume: {_config.PositionSize}$\nSlippage {tradeOpportunity.ExchangeLong?.Exchange}: {tradeOpportunity.ExchangeLong?.SlippageShort.ToString("0.00")}%\nSlippage {tradeOpportunity.ExchangeShort?.Exchange}: {tradeOpportunity.ExchangeShort?.SlippageLong.ToString("0.00")}%\nVolumeAskLong:{tradeOpportunity.ExchangeLong?.VolumeAsk}\nVolumeBidLong:{tradeOpportunity.ExchangeLong?.VolumeBid}\n\nVolumeAskShort:{tradeOpportunity.ExchangeShort?.VolumeAsk}\nVolumeBidShort:{tradeOpportunity.ExchangeShort?.VolumeBid}\n{fundingForLong}{fundingForShort}");
             }
             catch (Exception ex)
             {
@@ -116,24 +101,9 @@ namespace ArbitrageScanner.Infrastructure.Services
         {
             try
             {
-                string riskLevel = "";
-                if (tradeOpportunity.Volatility > 0)
-                {
-                    riskLevel = $"\nVolatility(30m): {tradeOpportunity.Volatility.ToString("0.00")}%\nRisk Level - ";
-                    double volatilityRatio = Math.Abs(tradeOpportunity.Volatility / tradeOpportunity.Spread * 100);
-
-                    if (volatilityRatio <= 15)
-                        riskLevel += "Safe";
-                    else if (volatilityRatio <= 30)
-                        riskLevel += "Medium";
-                    else if (volatilityRatio <= 50)
-                        riskLevel += "Risky";
-                    else
-                        riskLevel += "Dangerous";
-                }
+                
                 string fundingForLong = "";
                 string fundingForShort = "";
-                //string nextPayout = "";
                 try
                 {
                     if (tradeOpportunity.ExchangeLong?.FundingRate.HasValue == true && tradeOpportunity.ExchangeLong.FundingRate.Value.fundingRate.HasValue)
@@ -146,16 +116,12 @@ namespace ArbitrageScanner.Infrastructure.Services
                         double shortFunding = tradeOpportunity.ExchangeShort.FundingRate.Value.fundingRate.Value * 100;
                         fundingForShort = $"\nFunding {tradeOpportunity.ExchangeShort.Exchange}:{shortFunding.ToString("0.00")}%";
                     }
-                    //if (tradeOpportunity.FundingPayoutExchangeA.HasValue && tradeOpportunity.FundingPayoutExchangeB.HasValue)
-                    //{
-                    //    nextPayout = $"Next Payout\n{tradeOpportunity.ExchangeRateA.Exchange} : {tradeOpportunity.FundingPayoutExchangeA?.ToString("MM/dd HH:mm")} UTC\n{tradeOpportunity.ExchangeRateB.Exchange} : {tradeOpportunity.FundingPayoutExchangeB?.ToString("MM/dd HH:mm")} UTC";
-                    //}
                 }
                 catch (Exception ex)
                 {
                     _dataService.LogErrorEntry(ex, tradeOpportunity.ExchangeLong?.Symbol ?? "", "PostFoundFundingSpreadToTelegram");
                 }
-                await _telegramNotifierService.SendMessageAsync($"Coin: {tradeOpportunity.ExchangeRateA?.Symbol}\nFunding Spread: {tradeOpportunity.TotalFunding.ToString("0.00")}%\nLong: {tradeOpportunity.ExchangeLong?.Exchange}({tradeOpportunity.ExchangeLong?.ExchangeRate}$)\nShort: {tradeOpportunity.ExchangeShort?.Exchange}({tradeOpportunity.ExchangeShort?.ExchangeRate}$)\nPosition volume: {_config.PositionSize}$\nSlippage {tradeOpportunity.ExchangeLong?.Exchange}: {tradeOpportunity.ExchangeLong?.SlippageShort.ToString("0.00")}%\nSlippage {tradeOpportunity.ExchangeShort?.Exchange}: {tradeOpportunity.ExchangeShort?.SlippageLong.ToString("0.00")}%{riskLevel}{fundingForLong}{fundingForShort}\nVolumeAskLong:{tradeOpportunity.ExchangeLong?.VolumeAsk}\nVolumeBidLong:{tradeOpportunity.ExchangeLong?.VolumeBid}\nVolumeAskShort:{tradeOpportunity.ExchangeShort?.VolumeAsk}\nVolumeBidShort:{tradeOpportunity.ExchangeShort?.VolumeBid}\nPossible Profit:{tradeOpportunity.PossibleProfit.ToString("0.00")}%");
+                await _telegramNotifierService.SendMessageAsync($"Coin: {tradeOpportunity.ExchangeRateA?.Symbol}\nFunding Spread: {tradeOpportunity.TotalFunding.ToString("0.00")}%\nLong: {tradeOpportunity.ExchangeLong?.Exchange}({tradeOpportunity.ExchangeLong?.ExchangeRate}$)\nShort: {tradeOpportunity.ExchangeShort?.Exchange}({tradeOpportunity.ExchangeShort?.ExchangeRate}$)\nPosition volume: {_config.PositionSize}$\nSlippage {tradeOpportunity.ExchangeLong?.Exchange}: {tradeOpportunity.ExchangeLong?.SlippageShort.ToString("0.00")}%\nSlippage {tradeOpportunity.ExchangeShort?.Exchange}: {tradeOpportunity.ExchangeShort?.SlippageLong.ToString("0.00")}%{fundingForLong}{fundingForShort}\nVolumeAskLong:{tradeOpportunity.ExchangeLong?.VolumeAsk}\nVolumeBidLong:{tradeOpportunity.ExchangeLong?.VolumeBid}\nVolumeAskShort:{tradeOpportunity.ExchangeShort?.VolumeAsk}\nVolumeBidShort:{tradeOpportunity.ExchangeShort?.VolumeBid}\nPossible Profit:{tradeOpportunity.PossibleProfit.ToString("0.00")}%");
             }
             catch (Exception ex)
             {
@@ -166,21 +132,6 @@ namespace ArbitrageScanner.Infrastructure.Services
         {
             try
             {
-                string riskLevel = "";
-                if (tradeOpportunity.Volatility > 0)
-                {
-                    riskLevel = $"\nVolatility(30m): {tradeOpportunity.Volatility.ToString("0.00")}%\nRisk Level - ";
-                    double volatilityRatio = Math.Abs(tradeOpportunity.Volatility / tradeOpportunity.Spread * 100);
-
-                    if (volatilityRatio <= 15)
-                        riskLevel += "Safe";
-                    else if (volatilityRatio <= 30)
-                        riskLevel += "Medium";
-                    else if (volatilityRatio <= 50)
-                        riskLevel += "Risky";
-                    else
-                        riskLevel += "Dangerous";
-                }
                 string fundingForShort = "";
                 try
                 {
@@ -194,7 +145,7 @@ namespace ArbitrageScanner.Infrastructure.Services
                 {
                     _dataService.LogErrorEntry(ex, tradeOpportunity.ExchangeLong?.Symbol ?? "", "PostFoundFundingSpreadToTelegram");
                 }
-                await _telegramNotifierService.SendMessageAsync($"Coin: {tradeOpportunity.ExchangeRateA?.Symbol}\nSpot Spread: {tradeOpportunity.Spread.ToString("0.00")}%\n{tradeOpportunity.ExchangeLong?.Exchange} Spot: ({tradeOpportunity.ExchangeLong?.ExchangeRate}$)\n{tradeOpportunity.ExchangeShort?.Exchange} Futures: ({tradeOpportunity.ExchangeShort?.ExchangeRate}$)\nPosition volume: {_config.PositionSize}$\nSlippage Spot: {tradeOpportunity.ExchangeLong?.SlippageShort.ToString("0.00")}%\nSlippage Futures: {tradeOpportunity.ExchangeShort?.SlippageLong.ToString("0.00")}%{riskLevel}{fundingForShort}\nVolumeAskLong:{tradeOpportunity.ExchangeLong?.VolumeAsk}\nVolumeBidLong:{tradeOpportunity.ExchangeLong?.VolumeBid}\n\nVolumeAskShort:{tradeOpportunity.ExchangeShort?.VolumeAsk}\nVolumeBidShort:{tradeOpportunity.ExchangeShort?.VolumeBid}\nPossible Profit:{tradeOpportunity.PossibleProfit.ToString("0.00")}%");
+                await _telegramNotifierService.SendMessageAsync($"Coin: {tradeOpportunity.ExchangeRateA?.Symbol}\nSpot Spread: {tradeOpportunity.Spread.ToString("0.00")}%\n{tradeOpportunity.ExchangeLong?.Exchange} Spot: ({tradeOpportunity.ExchangeLong?.ExchangeRate}$)\n{tradeOpportunity.ExchangeShort?.Exchange} Futures: ({tradeOpportunity.ExchangeShort?.ExchangeRate}$)\nPosition volume: {_config.PositionSize}$\nSlippage Spot: {tradeOpportunity.ExchangeLong?.SlippageShort.ToString("0.00")}%\nSlippage Futures: {tradeOpportunity.ExchangeShort?.SlippageLong.ToString("0.00")}%{fundingForShort}\nVolumeAskLong:{tradeOpportunity.ExchangeLong?.VolumeAsk}\nVolumeBidLong:{tradeOpportunity.ExchangeLong?.VolumeBid}\n\nVolumeAskShort:{tradeOpportunity.ExchangeShort?.VolumeAsk}\nVolumeBidShort:{tradeOpportunity.ExchangeShort?.VolumeBid}\nPossible Profit:{tradeOpportunity.PossibleProfit.ToString("0.00")}%");
             }
             catch (Exception ex)
             {

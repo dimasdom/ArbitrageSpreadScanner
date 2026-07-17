@@ -34,8 +34,6 @@ namespace ArbitrageScanner.Spot.Services
             {
                 for (var j = i - 1; j >= 0; j--)
                 {
-                    // Spread = futures ExchangeRate (short) vs spot order book ask (long/buy).
-                    // SpotTicker.ExchangeRate is stale — the real executable spot price is SpotTicker.structOrderBook.asks[0][0].
                     if (coinData.ExchangeRates[i].SpotTicker is not null && coinData.ExchangeRates[j].SpotTicker is not null
                         && coinData.ExchangeRates[i].SpotTicker!.structOrderBook.asks?.Count > 0
                         && coinData.ExchangeRates[j].SpotTicker!.structOrderBook.asks?.Count > 0)
@@ -45,14 +43,12 @@ namespace ArbitrageScanner.Spot.Services
                         double spotAskI = coinData.ExchangeRates[i].SpotTicker!.structOrderBook.asks![0][0];
                         double spotAskJ = coinData.ExchangeRates[j].SpotTicker!.structOrderBook.asks![0][0];
 
-                        // Futures on i is higher than spot ask on j → short i, long j
                         if (coinData.ExchangeRates[i].ExchangeRate > spotAskJ)
                         {
                             exchangeAIsFutures = true;
                             spread = CalculateSpreadFor(coinData.ExchangeRates[i].ExchangeRate, spotAskJ);
                         }
 
-                        // Futures on j is higher than spot ask on i → short j, long i
                         if (!exchangeAIsFutures && spread < maxSpread && coinData.ExchangeRates[j].ExchangeRate > spotAskI)
                         {
                             spread = CalculateSpreadFor(coinData.ExchangeRates[j].ExchangeRate, spotAskI);
@@ -75,14 +71,6 @@ namespace ArbitrageScanner.Spot.Services
                 }
                 coinData.ExchangeRates.RemoveAt(i);
             }
-            //if (tradeOpportunity != null)
-            //{
-            //    tradeOpportunity.Volatility = await ExchangeService.GetVolatilityForSymbol(coinData.Symbol, tradeOpportunity.ExchangeLong.Exchange);
-            //    if (tradeOpportunity.Volatility < 0)
-            //    {
-            //        tradeOpportunity.Volatility = await ExchangeService.GetVolatilityForSymbol(coinData.Symbol, tradeOpportunity.ExchangeLong.Exchange);
-            //    }
-            //}
             return possiblePositions;
         }
 
@@ -120,7 +108,7 @@ namespace ArbitrageScanner.Spot.Services
             var orderBookEntries = isLong ? orderBook.asks : orderBook.bids;
             if (orderBookEntries == null || orderBookEntries.Count == 0)
                 throw new Exception("Order book is empty!");
-            double bestPrice = orderBookEntries[0][0]; // Лучшая цена
+            double bestPrice = orderBookEntries[0][0];
             double filledAmount = 0;
             double totalCost = 0;
 
@@ -145,28 +133,24 @@ namespace ArbitrageScanner.Spot.Services
             return slippage;
         }
 
-        public async Task<TradeOpportunityModel> WatchPossiblePosition(TradeOpportunityModel tradeOpportunity)
+        public async Task<TradeOpportunityModel?> WatchPossiblePosition(TradeOpportunityModel tradeOpportunity)
         {
             var exchangeRateLong = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeLong!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeLong!.Symbol, false, 30);
             var exchangeRateShort = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeShort!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeShort!.Symbol, false, 30);
-            if (exchangeRateLong is not null && exchangeRateShort is not null
-                && exchangeRateShort.structOrderBook.bids?.Count > 0
-                && exchangeRateLong.SpotTicker?.structOrderBook.asks?.Count > 0)
-            {
-                // IMPORTANT: For spot, always use order book prices — best ask to buy (long), best bid to sell (short).
-                // structOrderBook on GetDataForCoin result is always the FUTURES order book.
-                // The long (spot) leg must read from SpotTicker.structOrderBook which holds the real spot book.
-                double shortBid = exchangeRateShort.structOrderBook.bids![0][0];
-                double longAsk = exchangeRateLong.SpotTicker!.structOrderBook.asks![0][0];
-                var spread = CalculateSpreadFor(shortBid, longAsk);
-                tradeOpportunity.ExchangeLong = exchangeRateLong;
-                tradeOpportunity.ExchangeLong.structOrderBook = exchangeRateLong.SpotTicker!.structOrderBook;
-                tradeOpportunity.ExchangeShort = exchangeRateShort;
-                tradeOpportunity.ExchangeRateA = exchangeRateLong.Exchange == tradeOpportunity.ExchangeRateA!.Exchange ? exchangeRateLong : exchangeRateShort;
-                tradeOpportunity.ExchangeRateB = exchangeRateLong.Exchange == tradeOpportunity.ExchangeRateB!.Exchange ? exchangeRateLong : exchangeRateShort;
-                tradeOpportunity.Spread = spread;
-                tradeOpportunity = (await CalculatePossibleProfit(tradeOpportunity)) ?? tradeOpportunity;
-            }
+            if (exchangeRateLong is null || exchangeRateShort is null
+                || exchangeRateShort.structOrderBook.bids?.Count == 0
+                || exchangeRateLong.SpotTicker?.structOrderBook.asks?.Count is null or 0)
+                return null;
+            double shortBid = exchangeRateShort.structOrderBook.bids![0][0];
+            double longAsk = exchangeRateLong.SpotTicker!.structOrderBook.asks![0][0];
+            var spread = CalculateSpreadFor(shortBid, longAsk);
+            tradeOpportunity.ExchangeLong = exchangeRateLong;
+            tradeOpportunity.ExchangeLong.structOrderBook = exchangeRateLong.SpotTicker!.structOrderBook;
+            tradeOpportunity.ExchangeShort = exchangeRateShort;
+            tradeOpportunity.ExchangeRateA = exchangeRateLong.Exchange == tradeOpportunity.ExchangeRateA!.Exchange ? exchangeRateLong : exchangeRateShort;
+            tradeOpportunity.ExchangeRateB = exchangeRateLong.Exchange == tradeOpportunity.ExchangeRateB!.Exchange ? exchangeRateLong : exchangeRateShort;
+            tradeOpportunity.Spread = spread;
+            tradeOpportunity = (await CalculatePossibleProfit(tradeOpportunity)) ?? tradeOpportunity;
             return tradeOpportunity;
         }
     }
