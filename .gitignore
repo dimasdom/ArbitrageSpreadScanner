@@ -375,3 +375,7 @@ perspectivePairs_*
 # Windows-generated build paths
 **/obj*/
 **/bin*/
+
+# Local secrets - see appsettings*.template.json for the expected shape
+appsettings.json
+appsettings.Development.json
