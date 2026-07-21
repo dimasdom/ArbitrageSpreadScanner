@@ -1,0 +1,12 @@
+<Project>
+
+  <PropertyGroup>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <NoWarn>$(NoWarn);CA1707;CA1822;CA1305;CA1841;CA2201;CA1860;CA1001;CA1711;CA1311;CA1310;CA1304;CA1051;CA1720;CA1708;IDE0044;CA1805</NoWarn>
+  </PropertyGroup>
+
+</Project>

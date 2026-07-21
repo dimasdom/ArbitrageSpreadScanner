@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArbitrageScanner.Worker", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArbitrageScanner.IntegrationTests", "ArbitrageScanner.IntegrationTests\ArbitrageScanner.IntegrationTests.csproj", "{545EE07C-3A97-4A35-84A8-7D47DA951EF7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArbitrageScanner.Tests", "ArbitrageScanner.Tests\ArbitrageScanner.Tests.csproj", "{A524272D-6392-40D5-883A-7A7E6FBFE4A5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,6 +113,18 @@ Global
 		{545EE07C-3A97-4A35-84A8-7D47DA951EF7}.Release|x64.Build.0 = Release|Any CPU
 		{545EE07C-3A97-4A35-84A8-7D47DA951EF7}.Release|x86.ActiveCfg = Release|Any CPU
 		{545EE07C-3A97-4A35-84A8-7D47DA951EF7}.Release|x86.Build.0 = Release|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Debug|x64.Build.0 = Debug|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Debug|x86.Build.0 = Debug|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Release|x64.ActiveCfg = Release|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Release|x64.Build.0 = Release|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Release|x86.ActiveCfg = Release|Any CPU
+		{A524272D-6392-40D5-883A-7A7E6FBFE4A5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

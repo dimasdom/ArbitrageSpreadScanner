@@ -348,7 +348,7 @@ namespace ArbitrageScanner.Infrastructure.Services
             }
         }
 
-        public async Task Init<T>(T Exchange) where T : Exchange
+        public Task Init<T>(T Exchange) where T : Exchange
         {
             try
             {
@@ -359,6 +359,8 @@ namespace ArbitrageScanner.Infrastructure.Services
                 _dataService.LogErrorEntry(ex, "", "Init", exchange?.name?.ToString() ?? "");
                 Console.WriteLine(ex.Message);
             }
+
+            return Task.CompletedTask;
         }
     }
 

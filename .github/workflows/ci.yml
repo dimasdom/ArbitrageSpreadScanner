@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore ArbitrageScanner.sln
+
+      - name: Build (with analyzers)
+        run: dotnet build ArbitrageScanner.sln --no-restore --configuration Release
+
+      - name: Unit tests
+        run: >
+          dotnet test ArbitrageScanner.Tests/ArbitrageScanner.Tests.csproj
+          --no-restore --configuration Release
+          --logger "trx;LogFileName=unit-tests.trx"
+          --results-directory ./TestResults
+
+      - name: Integration tests
+        run: >
+          dotnet test ArbitrageScanner.IntegrationTests/ArbitrageScanner.IntegrationTests.csproj
+          --no-restore --configuration Release
+          --logger "trx;LogFileName=integration-tests.trx"
+          --results-directory ./TestResults
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: "TestResults/*.trx"
+          reporter: dotnet-trx
