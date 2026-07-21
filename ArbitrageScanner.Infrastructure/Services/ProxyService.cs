@@ -1,5 +1,6 @@
 ﻿using ArbitrageScanner.Domain.Models;
 using ArbitrageScanner.Domain.Interfaces;
+using ccxt;
 using MongoDB.Driver;
 using System.Net;
 
@@ -25,72 +26,74 @@ namespace ArbitrageScanner.Infrastructure.Services
         private readonly DataService _dataService;
         private int currentProxyIndex = 0;
         private readonly Random _rand = new();
+        private readonly Dictionary<string, RotatingWebProxy> _proxyByExchange = new();
 
         public ProxyService(DataService dataService)
         {
             _dataService = dataService;
         }
 
-        public async Task SetNextProxy()
+        public Task SetNextProxy()
         {
             var proxies = _dataService.Proxies;
             if (proxies.Count == 0)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             var proxyToUse = proxies[currentProxyIndex];
-
+            var nextProxy = new WebProxy($"{proxyToUse.ip}:{proxyToUse.port}")
+            {
+                Credentials = new NetworkCredential(proxyToUse.username, proxyToUse.password)
+            };
 
             foreach (var exchangeService in _dataService.ExchangeServices)
             {
-                var handler = new HttpClientHandler
-                {
-                    Proxy = new WebProxy($"{proxyToUse.ip}:{proxyToUse.port}")
-                    {
-                        Credentials = new NetworkCredential(proxyToUse.username, proxyToUse.password)
-                    },
-                    UseProxy = true,
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
-
-                handler.UseCookies = false;
-                var httpClient = new HttpClient(handler, true);
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(GetRandomUserAgent());
-                httpClient.DefaultRequestHeaders.ConnectionClose = true;
-                // Swap first, then dispose after a grace period so in-flight requests finish cleanly.
-                // Immediate dispose kills active connections and causes cascading timeouts.
-                var oldClient = exchangeService.Value.exchange!.httpClient;
-                exchangeService.Value.exchange.httpClient = httpClient;
-                _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => oldClient?.Dispose());
+                RotateExchangeProxy(exchangeService.Key, exchangeService.Value.exchange!, nextProxy);
             }
 
             foreach (var exchangeService in _dataService.ExchangeObserverServices)
             {
-                var handler = new HttpClientHandler
-                {
-                    Proxy = new WebProxy($"{proxyToUse.ip}:{proxyToUse.port}")
-                    {
-                        Credentials = new NetworkCredential(proxyToUse.username, proxyToUse.password)
-                    },
-                    UseProxy = true,
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
-
-                handler.UseCookies = false;
-                var httpClient = new HttpClient(handler, true);
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(GetRandomUserAgent());
-                httpClient.DefaultRequestHeaders.ConnectionClose = true;
-                var oldClient = exchangeService.Value.exchange!.httpClient;
-                exchangeService.Value.exchange.httpClient = httpClient;
-                _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => oldClient?.Dispose());
+                RotateExchangeProxy($"observer:{exchangeService.Key}", exchangeService.Value.exchange!, nextProxy);
             }
 
             Console.WriteLine($"[{DateTime.Now}] Switched to proxy: {proxyToUse.ip}:{proxyToUse.port}");
 
             currentProxyIndex = (currentProxyIndex + 1) % proxies.Count;
 
-            await Task.CompletedTask;
+            return Task.CompletedTask;
+        }
+
+        // Reuses one HttpClientHandler/HttpClient per exchange for the process lifetime instead of
+        // creating a new pair on every rotation. HttpClientHandler locks Proxy/UseProxy after the
+        // first request is sent, so rotation goes through a RotatingWebProxy indirection whose
+        // target can change freely without touching the handler's own (locked) configuration.
+        private void RotateExchangeProxy(string key, Exchange exchange, WebProxy nextProxy)
+        {
+            if (_proxyByExchange.TryGetValue(key, out var rotatingProxy))
+            {
+                rotatingProxy.Rotate(nextProxy);
+            }
+            else
+            {
+                rotatingProxy = new RotatingWebProxy(nextProxy);
+                _proxyByExchange[key] = rotatingProxy;
+
+                var handler = new HttpClientHandler
+                {
+                    Proxy = rotatingProxy,
+                    UseProxy = true,
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                    UseCookies = false
+                };
+
+                var httpClient = new HttpClient(handler, disposeHandler: true);
+                httpClient.DefaultRequestHeaders.ConnectionClose = true;
+                exchange.httpClient = httpClient;
+            }
+
+            exchange.httpClient!.DefaultRequestHeaders.UserAgent.Clear();
+            exchange.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(GetRandomUserAgent());
         }
 
         private string GetRandomUserAgent()

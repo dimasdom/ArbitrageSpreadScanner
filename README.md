@@ -378,17 +378,11 @@ docker build -f ArbitrageScanner/ArbitrageScanner.Worker/Dockerfile \
   ArbitrageScanner/
 ```
 
-Base runtime image: `mcr.microsoft.com/dotnet/runtime:9.0`
+Base runtime image: `mcr.microsoft.com/dotnet/aspnet:9.0` (upgraded from the plain `runtime:9.0` image so the `/health` endpoint, which needs the ASP.NET Core shared framework, actually has something to run on)
 
-### 4-Hour Restart Strategy
+### Retired: the 4-hour forced restart
 
-Exchange market data, ccxt session state, and loaded symbol lists can drift or become stale over long periods. To ensure clean state, the docker-compose entrypoint runs the worker with a hard 4-hour wall-clock timeout:
-
-```
-timeout 14400 dotnet ArbitrageScanner.Worker.dll; exit 0
-```
-
-After 14400 seconds (4 hours), the process exits cleanly. Docker's `restart: unless-stopped` policy (or Kubernetes restart policy) immediately starts a fresh container, which re-initialises all exchanges, reloads markets, restores active positions from MongoDB, and begins a new cycle. This periodic refresh prevents accumulation of stale data without requiring a graceful shutdown mechanism inside the application.
+Earlier revisions ran the worker under a hard 4-hour wall-clock `timeout`, paired with `restart: unless-stopped`, to force-recycle the process — undocumented as a workaround, but effectively one. See `docs/investigations/scanner-memory-leak.md` for the investigation: a concrete leak candidate in `ProxyService`'s per-rotation `HttpClient` churn was found and fixed (it now reuses one handler per exchange instead of creating a new one on every proxy rotation — see `RotatingWebProxy`), but that specific mechanism did **not** reproduce as an unbounded leak when tested in isolation. The restart hack was removed on the basis of that fix rather than a confirmed root cause; if the scanner's memory/handle usage still grows unbounded over a multi-hour run, that investigation doc is the place to pick the thread back up — the candidates it lists as not yet ruled out are the next things to check.
 
 ### docker-compose
 
