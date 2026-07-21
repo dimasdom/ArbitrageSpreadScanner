@@ -2,6 +2,8 @@
 
 The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 9 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to RabbitMQ for consumption by the Web API and Telegram Notifier.
 
+> This submodule is part of the ArbiScanner monorepo. `docs/completed-work-summary.md` and `docs/investigations/scanner-memory-leak.md`, referenced below, live in that monorepo's root — not inside this repo.
+
 ---
 
 ## Table of Contents
@@ -140,9 +142,9 @@ Concrete implementations of all domain interfaces plus supporting services.
 | `MongoService` | MongoDB CRUD operations for spreads, tickers, errors, proxies, and active positions |
 | `TradeOpportunityRepositoryMongo` | `ITradeOpportunityRepository` backed by MongoDB |
 | `ConfigService` | Loads `ConfigModel` from `appsettings.json` with env var overrides |
-| `ProxyService` / `ProxyPool` | Rotating HTTP proxy pool; distributes outbound exchange requests across configured proxies |
+| `ProxyService` / `ProxyPool` | Rotating HTTP proxy pool; distributes outbound exchange requests across configured proxies. Reuses one `HttpClientHandler`/`HttpClient` pair per exchange for the process lifetime (via `RotatingWebProxy`) rather than creating a new pair on every rotation — see [Docker](#docker) |
 | `TelegramNotifierService` | Sends alert messages directly via the Telegram Bot HTTP API |
-| `ServicesCommunicationService` | Serialises `TradeOpportunityModel` with protobuf and publishes to a RabbitMQ fanout exchange |
+| `ServicesCommunicationService` | Serialises `TradeOpportunityModel` with protobuf and publishes to a durable RabbitMQ fanout exchange with publisher confirms and a Polly retry policy; declares a `spread_dlx` dead-letter exchange alongside `spread_api`/`spread_telegram` |
 | `UserInterfaceService` | Console logging helper with structured output |
 | `StrategyWatchListService` | Thread-safe `ConcurrentDictionary<string, TradeOpportunityModel>` per strategy type |
 | `ConfigurationExtensions` | `GetArbitrageConfig()` extension on `IConfiguration`; reads env var overrides |
@@ -191,7 +193,7 @@ Namespace: `ArbitrageScanner.Spot.Services`
 The host entry point and main orchestration layer.
 
 - **`Program.cs`** — registers all services in the DI container and sets up the `IHostedService`
-- **`ArbitrageWorker`** — `BackgroundService` that calls `ArbitrageService.StartOperation()` on startup; the container is restarted every 4 hours (see [Docker](#docker))
+- **`ArbitrageWorker`** — `BackgroundService` that calls `ArbitrageService.StartOperation()` on startup and runs indefinitely (see [Docker](#docker) — this used to force-restart every 4 hours; that wrapper was removed, see `docs/investigations/scanner-memory-leak.md` in the monorepo root)
 - **`ArbitrageService`** — main orchestration loop: initialises exchanges, loads markets and proxies, restores active positions from MongoDB, starts all three observer services, then enters the parallel processing loop over the shared symbol universe
 - **`ArbitrageStrategyOrchestrator`** — per-symbol dispatcher; runs `FindAndComputeFuturesPositions`, `FindAndComputeFundingPositions`, and `FindAndComputeSpotPositions` concurrently for each `CoinDataModel`
 
@@ -240,6 +242,16 @@ Exchanges in `WeakExchangeList` are treated as less reliable venues. The engine 
 | OpenTelemetry SDK | Distributed tracing (HTTP client, RabbitMQ, MongoDB spans) |
 | OpenTelemetry.Exporter.OpenTelemetryProtocol | OTLP gRPC export of traces to Grafana Tempo |
 | OpenTelemetry.Exporter.Prometheus.HttpListener | Standalone `/metrics` HTTP server on port 8085 for Prometheus scraping |
+| Polly.Core | Retry (exponential backoff + jitter) around RabbitMQ publish and proxy-service HTTP calls |
+| Microsoft.Extensions.Diagnostics.HealthChecks | Mongo/RabbitMQ health checks exposed at `/health` on a minimal web host (port 8090), alongside the existing `/metrics` listener on 8085 |
+
+---
+
+## Code Quality & CI
+
+`.editorconfig` and `Directory.Build.props` enable `AnalysisLevel=latest`/`AnalysisMode=Recommended` with `TreatWarningsAsErrors`. `Directory.Build.props` documents the specific pre-existing warning rule IDs grandfathered in (locale formatting, test-naming conventions, etc.) — nullable-safety warnings are not among them and fail the build if introduced.
+
+`.github/workflows/ci.yml` runs restore → build (with analyzers) → `ArbitrageScanner.Tests` → `ArbitrageScanner.IntegrationTests` on every push. The root monorepo also has `.github/workflows/docker-build.yml`, which builds this service's image alongside the other three.
 
 ---
 
@@ -382,7 +394,7 @@ Base runtime image: `mcr.microsoft.com/dotnet/aspnet:9.0` (upgraded from the pla
 
 ### Retired: the 4-hour forced restart
 
-Earlier revisions ran the worker under a hard 4-hour wall-clock `timeout`, paired with `restart: unless-stopped`, to force-recycle the process — undocumented as a workaround, but effectively one. See `docs/investigations/scanner-memory-leak.md` for the investigation: a concrete leak candidate in `ProxyService`'s per-rotation `HttpClient` churn was found and fixed (it now reuses one handler per exchange instead of creating a new one on every proxy rotation — see `RotatingWebProxy`), but that specific mechanism did **not** reproduce as an unbounded leak when tested in isolation. The restart hack was removed on the basis of that fix rather than a confirmed root cause; if the scanner's memory/handle usage still grows unbounded over a multi-hour run, that investigation doc is the place to pick the thread back up — the candidates it lists as not yet ruled out are the next things to check.
+Earlier revisions ran the worker under a hard 4-hour wall-clock `timeout`, paired with `restart: unless-stopped`, to force-recycle the process — undocumented as a workaround, but effectively one. See `docs/investigations/scanner-memory-leak.md` in the monorepo root for the investigation: a concrete leak candidate in `ProxyService`'s per-rotation `HttpClient` churn was found and fixed (it now reuses one handler per exchange instead of creating a new one on every proxy rotation — see `RotatingWebProxy`), but that specific mechanism did **not** reproduce as an unbounded leak when tested in isolation. The restart hack was removed on the basis of that fix rather than a confirmed root cause; if the scanner's memory/handle usage still grows unbounded over a multi-hour run, that investigation doc is the place to pick the thread back up — the candidates it lists as not yet ruled out are the next things to check.
 
 ### docker-compose
 
@@ -400,6 +412,11 @@ services:
       - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
       - RABBITMQ_HOST=rabbitmq
       - OpenTelemetry__Endpoint=http://tempo:4317
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -475,6 +492,7 @@ Pure unit tests (xUnit + FluentAssertions) covering the calculation and formatti
 | `FormatOrdersToSendTests` | Mapping raw order book levels into the ask/bid lists attached to a `TradeOpportunityModel` |
 | `IntervalParsingTests` | `FundingObserverService.ParseInterval` (funding interval strings like `8h`, `4h30m`) and `GetNextPayoutUtc` boundary calculation |
 | `DeepCloneTests` | Deep-clone correctness for `TradeOpportunityModel`, including independence of nested `ExchangeRateModel` lists |
+| `RotatingWebProxyTests` | `RotatingWebProxy`'s `GetProxy`/`Credentials`/`IsBypassed` reflect the most recently rotated target, not the one it was constructed with — see [Docker](#docker) for why this class exists |
 
 `FundingObserverService.ParseInterval` is `internal`; `ArbitrageScanner.Funding.csproj` grants `ArbitrageScanner.Tests` access via `InternalsVisibleTo` so it can be unit tested without making it part of the public API.
 
