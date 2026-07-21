@@ -2,11 +2,14 @@
 using ArbitrageScanner.Worker.Controllers;
 using ArbitrageScanner.Worker.Worker;
 using ArbitrageScanner.Domain.Interfaces;
+using ArbitrageScanner.Infrastructure.HealthChecks;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Infrastructure.Repositories;
 using ArbitrageScanner.Futures.Services;
 using ArbitrageScanner.Funding.Services;
 using ArbitrageScanner.Spot.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Resources;
@@ -35,6 +38,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ArbitrageService>();
         services.AddHostedService<ArbitrageWorker>();
 
+        services.AddHealthChecks()
+            .AddCheck<MongoHealthCheck>("mongo")
+            .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+
         services.AddOpenTelemetry()
             .ConfigureResource(r => r.AddService("arbiscanner-arbitrage-scanner", serviceVersion: "1.0.0"))
             .WithTracing(tracing => tracing
@@ -49,6 +56,11 @@ var host = Host.CreateDefaultBuilder(args)
                 {
                     o.UriPrefixes = ["http://+:8085/"];
                 }));
+    })
+    .ConfigureWebHostDefaults(webBuilder =>
+    {
+        webBuilder.UseUrls("http://+:8090");
+        webBuilder.Configure(app => app.UseHealthChecks("/health"));
     })
     .Build();
 

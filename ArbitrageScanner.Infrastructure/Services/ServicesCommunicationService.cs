@@ -1,6 +1,8 @@
 ﻿using ArbitrageScanner.Domain.Models;
 using ArbitrageScanner.Domain.Interfaces;
 using ccxt;
+using Polly;
+using Polly.Retry;
 using ProtoBuf;
 using RabbitMQ.Client;
 using System;
@@ -13,12 +15,25 @@ namespace ArbitrageScanner.Infrastructure.Services
 {
     public class ServicesCommunicationService : IServicesCommunicationService
     {
+        public const string FanoutExchange = "spread_fanout_exchange";
+        public const string DeadLetterExchange = "spread_dlx";
+
         private readonly DataService _dataService;
         private IConnection? _connection;
         private IChannel? _publishChannel;
         private readonly SemaphoreSlim _initSemaphore = new(1, 1);
         private readonly SemaphoreSlim _publishSemaphore = new(1, 1);
         private bool _topologyDeclared;
+        private readonly ResiliencePipeline _retryPipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new RetryStrategyOptions
+            {
+                ShouldHandle = new PredicateBuilder().Handle<Exception>(),
+                MaxRetryAttempts = 3,
+                Delay = TimeSpan.FromSeconds(1),
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true
+            })
+            .Build();
 
         public ServicesCommunicationService(DataService dataService)
         {
@@ -44,17 +59,22 @@ namespace ArbitrageScanner.Infrastructure.Services
 
                 if (_publishChannel is null)
                 {
-                    _publishChannel = await _connection.CreateChannelAsync();
+                    _publishChannel = await _connection.CreateChannelAsync(
+                        new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true));
                 }
 
                 if (!_topologyDeclared)
                 {
-                    await _publishChannel.ExchangeDeclareAsync("spread_fanout_exchange", ExchangeType.Fanout, durable: true);
-                    await _publishChannel.QueueDeclareAsync("spread_telegram", durable: false, exclusive: false, autoDelete: false);
-                    await _publishChannel.QueueBindAsync("spread_telegram", "spread_fanout_exchange", routingKey: "");
+                    await _publishChannel.ExchangeDeclareAsync(DeadLetterExchange, ExchangeType.Fanout, durable: true);
 
-                    await _publishChannel.QueueDeclareAsync("spread_api", durable: false, exclusive: false, autoDelete: false);
-                    await _publishChannel.QueueBindAsync("spread_api", "spread_fanout_exchange", routingKey: "");
+                    var dlxArgs = new Dictionary<string, object?> { ["x-dead-letter-exchange"] = DeadLetterExchange };
+
+                    await _publishChannel.ExchangeDeclareAsync(FanoutExchange, ExchangeType.Fanout, durable: true);
+                    await _publishChannel.QueueDeclareAsync("spread_telegram", durable: true, exclusive: false, autoDelete: false, arguments: dlxArgs);
+                    await _publishChannel.QueueBindAsync("spread_telegram", FanoutExchange, routingKey: "");
+
+                    await _publishChannel.QueueDeclareAsync("spread_api", durable: true, exclusive: false, autoDelete: false, arguments: dlxArgs);
+                    await _publishChannel.QueueBindAsync("spread_api", FanoutExchange, routingKey: "");
 
                     _topologyDeclared = true;
                 }
@@ -72,31 +92,33 @@ namespace ArbitrageScanner.Infrastructure.Services
 
           public async Task PostPossiblePositionFanout(TradeOpportunityModel tradeOpportunity)
         {
-            
-
             try
             {
-                await EnsureInitializedAsync();
-                tradeOpportunity.FormatOrdersToSend();
-
-                using var ms = new MemoryStream();
-                Serializer.Serialize(ms, tradeOpportunity);
-                var body = ms.ToArray();
-
-                await _publishSemaphore.WaitAsync();
-                try
+                await _retryPipeline.ExecuteAsync(async ct =>
                 {
-                    await _publishChannel!.BasicPublishAsync("spread_fanout_exchange", routingKey: "", mandatory: false, body: body);
-                }
-                finally
-                {
-                    _publishSemaphore.Release();
-                }
+                    await EnsureInitializedAsync();
+                    tradeOpportunity.FormatOrdersToSend();
+
+                    using var ms = new MemoryStream();
+                    Serializer.Serialize(ms, tradeOpportunity);
+                    var body = ms.ToArray();
+
+                    await _publishSemaphore.WaitAsync(ct);
+                    try
+                    {
+                        await _publishChannel!.BasicPublishAsync(FanoutExchange, routingKey: "", mandatory: false, body: body, cancellationToken: ct);
+                    }
+                    finally
+                    {
+                        _publishSemaphore.Release();
+                    }
+                });
             }
             catch (Exception ex)
             {
                 _dataService.LogErrorEntry(ex, tradeOpportunity.ExchangeLong?.Symbol ?? "", "PostPossiblePositionFanout");
                 Console.WriteLine(ex.Message);
+                throw;
             }
         }
     }

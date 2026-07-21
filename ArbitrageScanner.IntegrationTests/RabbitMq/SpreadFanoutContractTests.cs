@@ -1,4 +1,5 @@
 using ArbitrageScanner.Domain.Models;
+using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.IntegrationTests.Fixtures;
 using ArbitrageScanner.IntegrationTests.Support;
 using FluentAssertions;
@@ -58,10 +59,13 @@ public class SpreadFanoutContractTests(RabbitMqTestFixture fixture)
         await using var connection = await CreateConnectionAsync();
         await using var channel = await connection.CreateChannelAsync();
 
+        var dlxArgs = new Dictionary<string, object?> { ["x-dead-letter-exchange"] = ServicesCommunicationService.DeadLetterExchange };
+
+        await channel.ExchangeDeclareAsync(ServicesCommunicationService.DeadLetterExchange, ExchangeType.Fanout, durable: true);
         await channel.ExchangeDeclareAsync(RabbitMqTestFixture.Exchange, ExchangeType.Fanout, durable: true);
-        await channel.QueueDeclareAsync(RabbitMqTestFixture.QueueTelegram, durable: false, exclusive: false, autoDelete: false);
+        await channel.QueueDeclareAsync(RabbitMqTestFixture.QueueTelegram, durable: true, exclusive: false, autoDelete: false, arguments: dlxArgs);
         await channel.QueueBindAsync(RabbitMqTestFixture.QueueTelegram, RabbitMqTestFixture.Exchange, routingKey: "");
-        await channel.QueueDeclareAsync(RabbitMqTestFixture.QueueApi, durable: false, exclusive: false, autoDelete: false);
+        await channel.QueueDeclareAsync(RabbitMqTestFixture.QueueApi, durable: true, exclusive: false, autoDelete: false, arguments: dlxArgs);
         await channel.QueueBindAsync(RabbitMqTestFixture.QueueApi, RabbitMqTestFixture.Exchange, routingKey: "");
 
         await channel.QueuePurgeAsync(RabbitMqTestFixture.QueueTelegram);
