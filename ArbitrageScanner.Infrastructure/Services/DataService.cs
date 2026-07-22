@@ -18,7 +18,7 @@ namespace ArbitrageScanner.Infrastructure.Services
 {
     public class DataService
     {
-        private static ITradeOpportunityRepository _tradeOpportunityRepositoryMongoRepository = new TradeOpportunityRepositoryMongo();
+        private static ITradeOpportunityRepository _tradeOpportunityRepositoryMongoRepository = null!;
         private static ExchangeRegistry _exchangeRegistry = new(new List<string>());
         private static readonly StrategyWatchListService _futuresWatchListService = new();
         private static readonly StrategyWatchListService _fundingWatchListService = new();

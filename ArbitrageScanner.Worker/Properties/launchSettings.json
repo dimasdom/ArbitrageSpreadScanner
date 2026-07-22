@@ -1,16 +1,10 @@
 {
   "profiles": {
     "ArbitrageBusiness": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "MongoDb_ConnectionString": "mongodb://localhost:27017"
-      }
+      "commandName": "Project"
     },
     "ArbitrageCommon": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "MongoDb_ConnectionString": "mongodb://localhost:27017"
-      }
+      "commandName": "Project"
     }
   }
 }

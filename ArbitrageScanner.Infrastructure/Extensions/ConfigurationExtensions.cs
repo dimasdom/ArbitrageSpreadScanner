@@ -21,6 +21,18 @@ namespace ArbitrageScanner.Infrastructure.Extensions
                 config.ChatId = chatId;
             }
 
+            var mongoConnectionString = Environment.GetEnvironmentVariable("MongoDb_ConnectionString");
+            if (!string.IsNullOrWhiteSpace(mongoConnectionString))
+            {
+                config.MongoDb.ConnectionString = mongoConnectionString;
+            }
+
+            var mongoDatabaseName = Environment.GetEnvironmentVariable("MongoDb_DatabaseName");
+            if (!string.IsNullOrWhiteSpace(mongoDatabaseName))
+            {
+                config.MongoDb.DatabaseName = mongoDatabaseName;
+            }
+
             return config;
         }
     }

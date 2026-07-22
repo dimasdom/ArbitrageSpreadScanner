@@ -2,6 +2,7 @@
 using ArbitrageScanner.Worker.Controllers;
 using ArbitrageScanner.Worker.Worker;
 using ArbitrageScanner.Domain.Interfaces;
+using ArbitrageScanner.Infrastructure.Extensions;
 using ArbitrageScanner.Infrastructure.HealthChecks;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Infrastructure.Repositories;
@@ -20,7 +21,12 @@ var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
     {
         services.AddSingleton<FileService>();
-        services.AddSingleton<ITradeOpportunityRepository, TradeOpportunityRepositoryMongo>();
+        services.AddSingleton(sp =>
+        {
+            var mongoConfig = context.Configuration.GetArbitrageConfig().MongoDb;
+            return new MongoService(mongoConfig.ConnectionString ?? string.Empty, mongoConfig.DatabaseName ?? string.Empty, sp.GetRequiredService<FileService>());
+        });
+        services.AddSingleton<ITradeOpportunityRepository>(sp => new TradeOpportunityRepositoryMongo(sp.GetRequiredService<MongoService>()));
         services.AddSingleton<DataService>();
         services.AddHttpClient("Telegram")
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(10));

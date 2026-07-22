@@ -21,5 +21,6 @@ namespace ArbitrageScanner.Domain.Models
         public List<string> ExchangeList { get; set; } = new();
         public List<string> WeakExchangeList { get; set; } = new();
         public List<ProxyModel> ProxyList { get; set; } = new();
+        public MongoDbConfig MongoDb { get; set; } = new();
     }
 }
