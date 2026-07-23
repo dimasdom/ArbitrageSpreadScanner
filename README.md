@@ -2,7 +2,6 @@
 
 The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 9 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to RabbitMQ for consumption by the Web API and Telegram Notifier.
 
-> This submodule is part of the ArbiScanner monorepo. `docs/completed-work-summary.md` and `docs/investigations/scanner-memory-leak.md`, referenced below, live in that monorepo's root — not inside this repo.
 
 ---
 
