@@ -1,6 +1,6 @@
 # ArbitrageScanner
 
-The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 9 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to RabbitMQ for consumption by the Web API and Telegram Notifier.
+The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 10 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to RabbitMQ for consumption by the Web API and Telegram Notifier.
 
 
 ---
@@ -231,7 +231,7 @@ Exchanges in `WeakExchangeList` are treated as less reliable venues. The engine 
 
 | Technology | Role |
 |---|---|
-| .NET 9 | Runtime and worker host |
+| .NET 10 | Runtime and worker host |
 | MongoDB / MongoDB.Driver 3.3 | Persistence for spread results, tickers, errors, positions, and proxies |
 | RabbitMQ / RabbitMQ.Client 7.1 | Message bus for publishing closed trade opportunities to downstream consumers |
 | protobuf-net / Google.Protobuf | Binary serialisation of `TradeOpportunityModel` for efficient RabbitMQ transport |
@@ -389,7 +389,7 @@ docker build -f ArbitrageScanner/ArbitrageScanner.Worker/Dockerfile \
   ArbitrageScanner/
 ```
 
-Base runtime image: `mcr.microsoft.com/dotnet/aspnet:9.0` (upgraded from the plain `runtime:9.0` image so the `/health` endpoint, which needs the ASP.NET Core shared framework, actually has something to run on)
+Base runtime image: `mcr.microsoft.com/dotnet/aspnet:10.0` (upgraded from the plain `runtime:10.0` image so the `/health` endpoint, which needs the ASP.NET Core shared framework, actually has something to run on)
 
 ### Retired: the 4-hour forced restart
 
@@ -439,7 +439,7 @@ services:
 
 ### Prerequisites
 
-- .NET 9 SDK
+- .NET 10 SDK
 - MongoDB instance (local or remote)
 - RabbitMQ instance (optional; only required if you need the publishing pipeline; the engine logs errors and continues if RabbitMQ is unavailable)
 
