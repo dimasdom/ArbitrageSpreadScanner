@@ -9,15 +9,59 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+
+      # SonarCloud is free for public repos (no paid license needed); requires a SONAR_TOKEN
+      # secret from the project's SonarCloud org, and /k /o below to match the imported project.
+      - name: Set up JDK for SonarCloud
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Install SonarCloud scanner
+        run: |
+          dotnet tool install --global dotnet-sonarscanner
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Begin SonarCloud analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >
+          dotnet-sonarscanner begin
+          /k:"dimasdom_ArbitrageSpreadScanner"
+          /o:"dimasdom"
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          /d:sonar.host.url="https://sonarcloud.io"
+          /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx"
+
+      # CodeQL is free for public GitHub repos, no external account/secrets needed.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: manual
 
       - name: Restore
         run: dotnet restore ArbitrageScanner.sln
@@ -38,6 +82,14 @@ jobs:
           --no-restore --configuration Release
           --logger "trx;LogFileName=integration-tests.trx"
           --results-directory ./TestResults
+
+      - name: End SonarCloud analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
