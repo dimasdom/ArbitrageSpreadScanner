@@ -12,5 +12,22 @@ namespace ArbitrageScanner.Infrastructure.Common
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
         }
+
+        /// <summary>
+        /// Delays for <paramref name="delay"/>, swallowing the cancellation exception so a caller's
+        /// `while (!cancellationToken.IsCancellationRequested)` loop can exit on the next check instead
+        /// of propagating an OperationCanceledException out of a retry/backoff delay.
+        /// </summary>
+        public static async Task DelayRetry(TimeSpan delay, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected on shutdown — caller's loop condition handles the exit.
+            }
+        }
     }
 }
