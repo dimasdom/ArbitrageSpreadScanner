@@ -44,35 +44,41 @@ namespace ArbitrageScanner.Funding.Services
             {
                 for (var j = i - 1; j >= 0; j--)
                 {
-                    var fundingRateI = coinData.ExchangeRates[i].FundingRate;
-                    var fundingRateJ = coinData.ExchangeRates[j].FundingRate;
-                    if (fundingRateI.HasValue && fundingRateJ.HasValue
-                        && fundingRateI.Value.fundingRate.HasValue && fundingRateJ.Value.fundingRate.HasValue)
-                    {
-                        bool isALong;
-                        var funding = CalculateFundingFor(
-                            fundingRateI.Value.fundingRate.Value,
-                            fundingRateJ.Value.fundingRate.Value,
-                            out isALong);
-
-                        if (funding > maxFunding)
-                        {
-                            TradeOpportunityModel tradeOpportunity = new TradeOpportunityModel();
-                            tradeOpportunity.ExchangeRateA = coinData.ExchangeRates[i];
-                            tradeOpportunity.ExchangeRateB = coinData.ExchangeRates[j];
-                            tradeOpportunity.ExchangeLong = isALong ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
-                            tradeOpportunity.ExchangeShort = isALong ? tradeOpportunity.ExchangeRateB : tradeOpportunity.ExchangeRateA;
-                            tradeOpportunity.TotalFunding = funding;
-                            tradeOpportunity.Spread = funding;
-                            tradeOpportunity.Symbol = tradeOpportunity.ExchangeRateA.Symbol;
-                            possiblePositions.Add((await CalculatePossibleProfit(tradeOpportunity))!);
-                        }
-                    }
+                    var opportunity = await TryBuildOpportunity(coinData, i, j, maxFunding);
+                    if (opportunity is not null)
+                        possiblePositions.Add(opportunity);
                 }
                 coinData.ExchangeRates.RemoveAt(i);
             }
 
             return possiblePositions;
+        }
+
+        private async Task<TradeOpportunityModel?> TryBuildOpportunity(CoinDataModel coinData, int i, int j, double maxFunding)
+        {
+            var fundingRateI = coinData.ExchangeRates[i].FundingRate;
+            var fundingRateJ = coinData.ExchangeRates[j].FundingRate;
+            if (!fundingRateI.HasValue || !fundingRateJ.HasValue
+                || !fundingRateI.Value.fundingRate.HasValue || !fundingRateJ.Value.fundingRate.HasValue)
+                return null;
+
+            var funding = CalculateFundingFor(
+                fundingRateI.Value.fundingRate.Value,
+                fundingRateJ.Value.fundingRate.Value,
+                out var isALong);
+
+            if (funding <= maxFunding)
+                return null;
+
+            TradeOpportunityModel tradeOpportunity = new TradeOpportunityModel();
+            tradeOpportunity.ExchangeRateA = coinData.ExchangeRates[i];
+            tradeOpportunity.ExchangeRateB = coinData.ExchangeRates[j];
+            tradeOpportunity.ExchangeLong = isALong ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
+            tradeOpportunity.ExchangeShort = isALong ? tradeOpportunity.ExchangeRateB : tradeOpportunity.ExchangeRateA;
+            tradeOpportunity.TotalFunding = funding;
+            tradeOpportunity.Spread = funding;
+            tradeOpportunity.Symbol = tradeOpportunity.ExchangeRateA.Symbol;
+            return await CalculatePossibleProfit(tradeOpportunity);
         }
 
         public Task<TradeOpportunityModel?> CalculatePossibleProfit(TradeOpportunityModel tradeOpportunity)
@@ -102,7 +108,7 @@ namespace ArbitrageScanner.Funding.Services
         {
             var orderBookEntries = isLong ? orderBook.asks : orderBook.bids;
             if (orderBookEntries == null || orderBookEntries.Count == 0)
-                throw new Exception("Order book is empty!");
+                throw new InvalidOperationException("Order book is empty!");
             double bestPrice = orderBookEntries[0][0]; // Лучшая цена
             double filledAmount = 0;
             double totalCost = 0;
@@ -121,7 +127,7 @@ namespace ArbitrageScanner.Funding.Services
             }
 
             if (filledAmount < orderSize)
-                throw new Exception("Not Enough Liqudidy!");
+                throw new InvalidOperationException("Not Enough Liqudidy!");
 
             double avgFillPrice = totalCost / filledAmount;
             double slippage = (avgFillPrice - bestPrice) / bestPrice * 100;
