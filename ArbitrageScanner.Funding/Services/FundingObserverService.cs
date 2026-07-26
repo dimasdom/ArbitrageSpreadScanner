@@ -1,4 +1,5 @@
-﻿using ArbitrageScanner.Infrastructure.Extensions;
+﻿using ArbitrageScanner.Infrastructure.Common;
+using ArbitrageScanner.Infrastructure.Extensions;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Domain.Interfaces;
 using ArbitrageScanner.Domain.Models;
@@ -84,9 +85,9 @@ namespace ArbitrageScanner.Funding.Services
                 }
             }
         }
-        public async Task StartToWatchPositionsWithCombineKeys()
+        public async Task StartToWatchPositionsWithCombineKeys(CancellationToken cancellationToken)
         {
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
@@ -95,13 +96,13 @@ namespace ArbitrageScanner.Funding.Services
                         var watchTasks = _dataService.WatchListFunding.Select(item => WatchPossibleFundingPositionWithCombineKey(item.Value));
                         await Task.WhenAll(watchTasks);
                     }
-                    await Task.Delay(TimeSpan.FromMinutes(WatchLoopDelayMinutes));
+                    await ArbitrageScanner.Infrastructure.Common.TaskExtensions.DelayRetry(TimeSpan.FromMinutes(WatchLoopDelayMinutes), cancellationToken);
                 }
                 catch (Exception ex)
                 {
                     _dataService.LogErrorEntry(ex, method: "StartToWatchPositionsWithCombineKeys");
                     Console.WriteLine(ex.Message);
-                    await Task.Delay(TimeSpan.FromSeconds(RetryDelaySeconds));
+                    await ArbitrageScanner.Infrastructure.Common.TaskExtensions.DelayRetry(TimeSpan.FromSeconds(RetryDelaySeconds), cancellationToken);
                 }
             }
         }
