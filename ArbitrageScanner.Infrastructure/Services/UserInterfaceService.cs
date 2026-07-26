@@ -161,7 +161,7 @@ namespace ArbitrageScanner.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                _dataService.LogErrorEntry(ex, tradeOpportunity?.ExchangeRateA?.Symbol ?? "", "PostInvalidatingSpreadToTelegram");
+                _dataService.LogErrorEntry(ex, tradeOpportunity.ExchangeRateA?.Symbol ?? "", "PostInvalidatingSpreadToTelegram");
                 Console.WriteLine(ex.Message);
             }
         }
@@ -174,7 +174,7 @@ namespace ArbitrageScanner.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                _dataService.LogErrorEntry(ex, tradeOpportunity?.ExchangeRateA?.Symbol ?? "", "PostInvalidatingSpotSpreadToTelegram");
+                _dataService.LogErrorEntry(ex, tradeOpportunity.ExchangeRateA?.Symbol ?? "", "PostInvalidatingSpotSpreadToTelegram");
                 Console.WriteLine(ex.Message);
             }
         }

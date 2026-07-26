@@ -76,7 +76,7 @@ namespace ArbitrageScanner.Infrastructure.Services
             if(allProxies.Count == 0)
             {
                 allProxies = _fileService?.LoadProxyList() ?? new List<ProxyModel>();
-                if (allProxies != null && allProxies.Count > 0)
+                if (allProxies.Count > 0)
                 {
                     foreach (var proxy in allProxies)
                         proxy.id = MongoDB.Bson.ObjectId.GenerateNewId();

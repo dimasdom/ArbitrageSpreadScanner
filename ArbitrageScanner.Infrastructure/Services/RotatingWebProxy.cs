@@ -22,7 +22,10 @@ namespace ArbitrageScanner.Infrastructure.Services
         public ICredentials? Credentials
         {
             get => _current.Credentials;
-            set { }
+            set
+            {
+                // No-op: credentials travel with the WebProxy swapped in via Rotate(), not through this setter.
+            }
         }
 
         public Uri GetProxy(Uri destination) => _current.GetProxy(destination) ?? destination;
