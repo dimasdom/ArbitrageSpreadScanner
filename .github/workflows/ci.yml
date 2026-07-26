@@ -55,6 +55,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx"
+          /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
 
       # CodeQL is free for public GitHub repos, no external account/secrets needed.
       - name: Initialize CodeQL
@@ -75,6 +76,7 @@ jobs:
           --no-restore --configuration Release
           --logger "trx;LogFileName=unit-tests.trx"
           --results-directory ./TestResults
+          --collect:"XPlat Code Coverage;Format=opencover"
 
       - name: Integration tests
         run: >
@@ -82,6 +84,7 @@ jobs:
           --no-restore --configuration Release
           --logger "trx;LogFileName=integration-tests.trx"
           --results-directory ./TestResults
+          --collect:"XPlat Code Coverage;Format=opencover"
 
       - name: End SonarCloud analysis
         env:
