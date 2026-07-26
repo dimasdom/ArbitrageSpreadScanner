@@ -77,7 +77,7 @@ namespace ArbitrageScanner.Futures.Services
         {
             var orderBookEntries = isLong ? orderBook.asks : orderBook.bids;
             if (orderBookEntries == null || orderBookEntries.Count == 0)
-                throw new Exception("Order book is empty!");
+                throw new InvalidOperationException("Order book is empty!");
             double bestPrice = orderBookEntries[0][0];
             double filledAmount = 0;
             double totalCost = 0;
@@ -96,7 +96,7 @@ namespace ArbitrageScanner.Futures.Services
             }
 
             if (filledAmount < orderSize)
-                throw new Exception("Not Enough Liqudidy!");
+                throw new InvalidOperationException("Not Enough Liqudidy!");
 
             double avgFillPrice = totalCost / filledAmount;
             double slippage = (avgFillPrice - bestPrice) / bestPrice * 100;
