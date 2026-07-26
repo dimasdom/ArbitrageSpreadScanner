@@ -52,8 +52,7 @@ namespace ArbitrageScanner.Infrastructure.Services
             {
                 if (_connection is null)
                 {
-                    var host = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost";
-                    var factory = new ConnectionFactory { HostName = host };
+                    var factory = ArbitrageScanner.Infrastructure.Common.RabbitMqConnectionFactory.FromEnvironment();
                     _connection = await factory.CreateConnectionAsync();
                 }
 

@@ -1,5 +1,5 @@
+using ArbitrageScanner.Infrastructure.Common;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using RabbitMQ.Client;
 
 namespace ArbitrageScanner.Infrastructure.HealthChecks;
 
@@ -9,8 +9,7 @@ public class RabbitMqHealthCheck : IHealthCheck
     {
         try
         {
-            var host = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost";
-            var factory = new ConnectionFactory { HostName = host };
+            var factory = RabbitMqConnectionFactory.FromEnvironment();
 
             await using var connection = await factory.CreateConnectionAsync(cancellationToken);
             return HealthCheckResult.Healthy();
