@@ -26,7 +26,7 @@ namespace ArbitrageScanner.Worker.Worker
 
                 if (!stoppingToken.IsCancellationRequested)
                 {
-                    await _arbitrageService.StartOperation(true);
+                    await _arbitrageService.StartOperation(true, stoppingToken);
                 }
             }
             catch (Exception ex)

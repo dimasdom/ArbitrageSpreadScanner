@@ -71,7 +71,7 @@ namespace ArbitrageScanner.Worker
             });
             Task.WaitAll(Task.WhenAll(tasks));
         }
-        public async Task StartOperation(bool parallel)
+        public async Task StartOperation(bool parallel, CancellationToken cancellationToken)
         {
             foreach (var svc in _dataService.ExchangeServices.Select(x => x.Value))
             {
@@ -91,25 +91,25 @@ namespace ArbitrageScanner.Worker
             await _dataService.LoadProxiesAsync();
             await _proxyService.SetNextProxy();
             await _dataService.LoadActivePossiblePositionsAsync();
-            _futuresObserverService.StartToWatchPositionsWithCombineKeys().FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Futures");
-            _fundingObserverService.StartToWatchPositionsWithCombineKeys().FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Funding");
-            _spotObserverService.StartToWatchPositionsWithCombineKeys().FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Spot");
+            _futuresObserverService.StartToWatchPositionsWithCombineKeys(cancellationToken).FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Futures");
+            _fundingObserverService.StartToWatchPositionsWithCombineKeys(cancellationToken).FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Funding");
+            _spotObserverService.StartToWatchPositionsWithCombineKeys(cancellationToken).FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Spot");
             if (!symbols.Any())
             {
                 symbols = (await _dataService.GetUniqueCommonFuturesPairsFromApiAsync()).ToList();
             }
             if (parallel)
             {
-                await StartOperationParallel();
+                await StartOperationParallel(cancellationToken: cancellationToken);
             }
             else
             {
-                await StartOperations();
+                await StartOperations(cancellationToken);
             }
         }
-        public async Task StartOperations()
+        public async Task StartOperations(CancellationToken cancellationToken)
         {
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
@@ -123,14 +123,14 @@ namespace ArbitrageScanner.Worker
                 {
                     _dataService.LogErrorEntry(ex, method: "StartOperations");
                     Console.WriteLine($"StartOperations {ex.Message}");
-                    await Task.Delay(TimeSpan.FromSeconds(RetryDelaySeconds));
+                    await ArbitrageScanner.Infrastructure.Common.TaskExtensions.DelayRetry(TimeSpan.FromSeconds(RetryDelaySeconds), cancellationToken);
                 }
             }
         }
 
-        public async Task StartOperationParallel(int timesUpdated = 0)
+        public async Task StartOperationParallel(int timesUpdated = 0, CancellationToken cancellationToken = default)
         {
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
@@ -151,7 +151,7 @@ namespace ArbitrageScanner.Worker
 
                         if (symbolCount % 200 == 0)
                         {
-                            await Task.Delay(TimeSpan.FromSeconds(SymbolBatchIntervalSeconds));
+                            await Task.Delay(TimeSpan.FromSeconds(SymbolBatchIntervalSeconds), cancellationToken);
                             await _proxyService.SetNextProxy();
                         }
 
@@ -175,7 +175,7 @@ namespace ArbitrageScanner.Worker
                 {
                     _dataService.LogErrorEntry(ex, method: "StartOperationParallel");
                     Console.WriteLine($"StartOperationParallel {ex.Message}");
-                    await Task.Delay(TimeSpan.FromSeconds(RetryDelaySeconds));
+                    await ArbitrageScanner.Infrastructure.Common.TaskExtensions.DelayRetry(TimeSpan.FromSeconds(RetryDelaySeconds), cancellationToken);
                 }
             }
         }
