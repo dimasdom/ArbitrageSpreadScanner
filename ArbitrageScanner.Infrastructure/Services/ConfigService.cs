@@ -5,9 +5,8 @@ namespace ArbitrageScanner.Infrastructure.Services
 {
     public class ConfigService
     {
-        private static ConfigModel _config = new ConfigModel();
+        private readonly ConfigModel _config;
 
-        public static ConfigModel Config => _config;
         public ConfigModel Current => _config;
 
         public ConfigService(IConfiguration configuration)
