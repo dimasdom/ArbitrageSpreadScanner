@@ -8,6 +8,7 @@ using Xunit;
 
 namespace ArbitrageScanner.Tests.Services;
 
+[Collection(SharedProxyPoolCollection.Name)]
 public class DataServiceTests
 {
     private static ExchangeRateModel Rate(string symbol, string exchange, double rate = 100) => new()

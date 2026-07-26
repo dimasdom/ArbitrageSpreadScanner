@@ -39,6 +39,17 @@ public class RotatingWebProxyTests
     }
 
     [Fact]
+    public void Credentials_Setter_IsNoOp()
+    {
+        var target = new WebProxy("http://10.0.0.1:8080") { Credentials = new NetworkCredential("user1", "pass1") };
+        var proxy = new RotatingWebProxy(target);
+
+        proxy.Credentials = new NetworkCredential("someone-else", "ignored");
+
+        proxy.Credentials.Should().Be(target.Credentials);
+    }
+
+    [Fact]
     public void IsBypassed_DelegatesToTheCurrentTarget()
     {
         var bypassAll = new WebProxy("http://10.0.0.1:8080") { BypassProxyOnLocal = false };

@@ -8,6 +8,7 @@ using Xunit;
 
 namespace ArbitrageScanner.Tests.Services;
 
+[Collection(SharedProxyPoolCollection.Name)]
 public class ProxyServiceTests
 {
     private static async Task<DataService> BuildDataServiceWithProxies(params ProxyModel[] proxies)

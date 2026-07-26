@@ -8,6 +8,7 @@ using Xunit;
 
 namespace ArbitrageScanner.Tests.Services;
 
+[Collection(SharedEnvironmentVariablesCollection.Name)]
 public class TelegramNotifierServiceTests
 {
     private sealed class StubHttpMessageHandler : HttpMessageHandler

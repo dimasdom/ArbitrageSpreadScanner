@@ -1,10 +1,12 @@
 using ArbitrageScanner.Infrastructure.Services;
+using ArbitrageScanner.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace ArbitrageScanner.Tests.Services;
 
+[Collection(SharedEnvironmentVariablesCollection.Name)]
 public class ConfigServiceTests
 {
     private static IConfiguration BuildConfig(double positionSize = 500) => new ConfigurationBuilder()
