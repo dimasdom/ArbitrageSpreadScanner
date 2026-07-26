@@ -18,6 +18,8 @@ public sealed class MongoTestFixture : IAsyncLifetime
 
     public Task DisposeAsync() => _mongo.DisposeAsync().AsTask();
 
+    public string ConnectionString => _mongo.GetConnectionString();
+
     public TradeOpportunityRepositoryMongo CreateRepository() =>
         new(new MongoService(_mongo.GetConnectionString(), DatabaseName));
 

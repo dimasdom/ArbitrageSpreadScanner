@@ -30,6 +30,7 @@
     <ProjectReference Include="../ArbitrageScanner.Futures/ArbitrageScanner.Futures.csproj" />
     <ProjectReference Include="../ArbitrageScanner.Funding/ArbitrageScanner.Funding.csproj" />
     <ProjectReference Include="../ArbitrageScanner.Spot/ArbitrageScanner.Spot.csproj" />
+    <ProjectReference Include="../ArbitrageScanner.Worker/ArbitrageScanner.Worker.csproj" />
   </ItemGroup>
 
 </Project>
