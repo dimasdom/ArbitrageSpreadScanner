@@ -306,6 +306,18 @@ public class ExchangeServiceTests
     }
 
     [Fact]
+    public async Task LoadSpotPairs_Throws_ReturnsEmpty()
+    {
+        var fake = new FakeExchange();
+        fake.MarketsProvider = _ => throw new InvalidOperationException("boom");
+        var service = BuildService(fake);
+
+        var pairs = await service.LoadSpotPairs();
+
+        pairs.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task LoadSwapMarkets_FirstLoad_PopulatesMarketsAndDataServiceCache()
     {
         var fake = new FakeExchange("kraken");
@@ -403,6 +415,18 @@ public class ExchangeServiceTests
 
         callCount.Should().Be(1);
         service2.spotMarkets.Should().ContainKey("ETH/USDT");
+    }
+
+    [Fact]
+    public async Task LoadSpotMarkets_Throws_DoesNotPropagate()
+    {
+        var fake = new FakeExchange();
+        fake.MarketsProvider = _ => throw new InvalidOperationException("boom");
+        var service = BuildService(fake);
+
+        var act = async () => await service.LoadSpotMarkets();
+
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]
