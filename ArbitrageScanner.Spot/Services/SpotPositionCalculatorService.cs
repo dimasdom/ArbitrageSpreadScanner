@@ -34,80 +34,102 @@ namespace ArbitrageScanner.Spot.Services
             {
                 for (var j = i - 1; j >= 0; j--)
                 {
-                    if (coinData.ExchangeRates[i].SpotTicker is not null && coinData.ExchangeRates[j].SpotTicker is not null
-                        && coinData.ExchangeRates[i].SpotTicker!.structOrderBook.asks?.Count > 0
-                        && coinData.ExchangeRates[j].SpotTicker!.structOrderBook.asks?.Count > 0)
-                    {
-                        double spread = 0;
-                        bool exchangeAIsFutures = false;
-                        double spotAskI = coinData.ExchangeRates[i].SpotTicker!.structOrderBook.asks![0][0];
-                        double spotAskJ = coinData.ExchangeRates[j].SpotTicker!.structOrderBook.asks![0][0];
-
-                        if (coinData.ExchangeRates[i].ExchangeRate > spotAskJ)
-                        {
-                            exchangeAIsFutures = true;
-                            spread = CalculateSpreadFor(coinData.ExchangeRates[i].ExchangeRate, spotAskJ);
-                        }
-
-                        if (!exchangeAIsFutures && spread < maxSpread && coinData.ExchangeRates[j].ExchangeRate > spotAskI)
-                        {
-                            spread = CalculateSpreadFor(coinData.ExchangeRates[j].ExchangeRate, spotAskI);
-                        }
-                        if (spread > maxSpread && spread < 50)
-                        {
-                            TradeOpportunityModel tradeOpportunity = new TradeOpportunityModel();
-                            tradeOpportunity.ExchangeRateA = coinData.ExchangeRates[i];
-                            tradeOpportunity.ExchangeRateB = coinData.ExchangeRates[j];
-                            tradeOpportunity.Spread = spread;
-                            tradeOpportunity.ExchangeLong = exchangeAIsFutures ? tradeOpportunity.ExchangeRateB : tradeOpportunity.ExchangeRateA;
-                            tradeOpportunity.ExchangeShort = exchangeAIsFutures ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
-                            tradeOpportunity.ExchangeLong!.ExchangeRate = tradeOpportunity.ExchangeLong!.SpotTicker!.ExchangeRate;
-                            tradeOpportunity.ExchangeLong!.structOrderBook = tradeOpportunity.ExchangeLong!.SpotTicker!.structOrderBook;
-                            tradeOpportunity.ExchangeLong!.Symbol = tradeOpportunity.ExchangeLong!.Symbol.Replace(":USDT", "");
-                            tradeOpportunity.Symbol = tradeOpportunity.ExchangeLong!.Symbol;
-                            possiblePositions.Add((await CalculatePossibleProfit(tradeOpportunity))!);
-                        }
-                    }
+                    var opportunity = await TryBuildOpportunity(coinData, i, j, maxSpread);
+                    if (opportunity is not null)
+                        possiblePositions.Add(opportunity);
                 }
                 coinData.ExchangeRates.RemoveAt(i);
             }
             return possiblePositions;
         }
 
+        private static bool HasUsableSpotTickers(CoinDataModel coinData, int i, int j)
+        {
+            return coinData.ExchangeRates[i].SpotTicker is not null && coinData.ExchangeRates[j].SpotTicker is not null
+                && coinData.ExchangeRates[i].SpotTicker!.structOrderBook.asks?.Count > 0
+                && coinData.ExchangeRates[j].SpotTicker!.structOrderBook.asks?.Count > 0;
+        }
+
+        private (double spread, bool exchangeAIsFutures) CalculateBestSpread(CoinDataModel coinData, int i, int j)
+        {
+            double spotAskI = coinData.ExchangeRates[i].SpotTicker!.structOrderBook.asks![0][0];
+            double spotAskJ = coinData.ExchangeRates[j].SpotTicker!.structOrderBook.asks![0][0];
+
+            if (coinData.ExchangeRates[i].ExchangeRate > spotAskJ)
+                return (CalculateSpreadFor(coinData.ExchangeRates[i].ExchangeRate, spotAskJ), true);
+
+            if (coinData.ExchangeRates[j].ExchangeRate > spotAskI)
+                return (CalculateSpreadFor(coinData.ExchangeRates[j].ExchangeRate, spotAskI), false);
+
+            return (0, false);
+        }
+
+        private async Task<TradeOpportunityModel?> TryBuildOpportunity(CoinDataModel coinData, int i, int j, double maxSpread)
+        {
+            if (!HasUsableSpotTickers(coinData, i, j))
+                return null;
+
+            var (spread, exchangeAIsFutures) = CalculateBestSpread(coinData, i, j);
+            if (spread <= maxSpread || spread >= 50)
+                return null;
+
+            TradeOpportunityModel tradeOpportunity = new TradeOpportunityModel();
+            tradeOpportunity.ExchangeRateA = coinData.ExchangeRates[i];
+            tradeOpportunity.ExchangeRateB = coinData.ExchangeRates[j];
+            tradeOpportunity.Spread = spread;
+            tradeOpportunity.ExchangeLong = exchangeAIsFutures ? tradeOpportunity.ExchangeRateB : tradeOpportunity.ExchangeRateA;
+            tradeOpportunity.ExchangeShort = exchangeAIsFutures ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
+            tradeOpportunity.ExchangeLong!.ExchangeRate = tradeOpportunity.ExchangeLong!.SpotTicker!.ExchangeRate;
+            tradeOpportunity.ExchangeLong!.structOrderBook = tradeOpportunity.ExchangeLong!.SpotTicker!.structOrderBook;
+            tradeOpportunity.ExchangeLong!.Symbol = tradeOpportunity.ExchangeLong!.Symbol.Replace(":USDT", "");
+            tradeOpportunity.Symbol = tradeOpportunity.ExchangeLong!.Symbol;
+            return await CalculatePossibleProfit(tradeOpportunity);
+        }
+
         public Task<TradeOpportunityModel?> CalculatePossibleProfit(TradeOpportunityModel tradeOpportunity)
         {
-            if (tradeOpportunity is not null)
-            {
-                if (tradeOpportunity.ExchangeLong!.structOrderBook.asks?.Count > 0 && tradeOpportunity.ExchangeLong!.structOrderBook.bids?.Count > 0)
-                {
-                    tradeOpportunity.ExchangeLong!.SlippageLong = CalculateSlippage(tradeOpportunity.ExchangeLong!.structOrderBook, tradeOpportunity.ExchangeLong!.Symbol, _config.PositionSize, true);
-                    tradeOpportunity.ExchangeLong!.SlippageShort = CalculateSlippage(tradeOpportunity.ExchangeLong!.structOrderBook, tradeOpportunity.ExchangeLong!.Symbol, _config.PositionSize, false);
-                    tradeOpportunity.ExchangeLong!.SummarySlipage = tradeOpportunity.ExchangeLong!.SlippageLong + tradeOpportunity.ExchangeLong!.SlippageShort;
-                }
-                if (tradeOpportunity.ExchangeShort!.structOrderBook.asks?.Count > 0 && tradeOpportunity.ExchangeShort!.structOrderBook.bids?.Count > 0)
-                {
-                    tradeOpportunity.ExchangeShort!.SlippageLong = CalculateSlippage(tradeOpportunity.ExchangeShort!.structOrderBook, tradeOpportunity.ExchangeLong!.Symbol, _config.PositionSize, true);
-                    tradeOpportunity.ExchangeShort!.SlippageShort = CalculateSlippage(tradeOpportunity.ExchangeShort!.structOrderBook, tradeOpportunity.ExchangeLong!.Symbol, _config.PositionSize, false);
-                    tradeOpportunity.ExchangeShort!.SummarySlipage = tradeOpportunity.ExchangeShort!.SlippageLong + tradeOpportunity.ExchangeShort!.SlippageShort;
-                }
-                var summarySlippage = tradeOpportunity.ExchangeLong!.SummarySlipage + tradeOpportunity.ExchangeShort!.SummarySlipage;
-                var longEchange = _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeLong!.Exchange];
-                var shortEchange = _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeShort!.Exchange];
-                var longMaker = longEchange.spotMarkets.TryGetValue(tradeOpportunity.ExchangeLong!.Symbol, out var longSpotMarket) && longSpotMarket.maker.HasValue ? longSpotMarket.maker.Value : 0;
-                var longExchangeMaker = longMaker > 0.001 ? longMaker * 10 : longMaker * 100;
-                var shortSymbolKey = tradeOpportunity.ExchangeShort!.Symbol.Contains(":USDT") ? tradeOpportunity.ExchangeShort!.Symbol : tradeOpportunity.ExchangeShort!.Symbol + ":USDT";
-                var shortMaker = shortEchange.markets.TryGetValue(shortSymbolKey, out var shortMarket) && shortMarket.maker.HasValue ? shortMarket.maker.Value : 0;
-                var shortExchangeMaker = shortMaker > 0.001 ? shortMaker * 10 : shortMaker * 100;
-                tradeOpportunity.SummaryTarrif = longExchangeMaker * 2 + shortExchangeMaker * 2;
-                tradeOpportunity.PossibleProfit = Math.Abs(tradeOpportunity.Spread) - tradeOpportunity.SummaryTarrif - summarySlippage;
-            }
+            if (tradeOpportunity is null)
+                return Task.FromResult<TradeOpportunityModel?>(tradeOpportunity);
+
+            var longSymbol = tradeOpportunity.ExchangeLong!.Symbol;
+            ApplySlippageIfOrderBookAvailable(tradeOpportunity.ExchangeLong!, longSymbol);
+            ApplySlippageIfOrderBookAvailable(tradeOpportunity.ExchangeShort!, longSymbol);
+
+            var summarySlippage = tradeOpportunity.ExchangeLong!.SummarySlipage + tradeOpportunity.ExchangeShort!.SummarySlipage;
+            var summaryTariff = CalculateSummaryTariff(tradeOpportunity);
+
+            tradeOpportunity.SummaryTarrif = summaryTariff;
+            tradeOpportunity.PossibleProfit = Math.Abs(tradeOpportunity.Spread) - summaryTariff - summarySlippage;
+
             return Task.FromResult<TradeOpportunityModel?>(tradeOpportunity);
+        }
+
+        private void ApplySlippageIfOrderBookAvailable(ExchangeRateModel exchange, string longSymbol)
+        {
+            if (!(exchange.structOrderBook.asks?.Count > 0) || !(exchange.structOrderBook.bids?.Count > 0))
+                return;
+
+            exchange.SlippageLong = CalculateSlippage(exchange.structOrderBook, longSymbol, _config.PositionSize, true);
+            exchange.SlippageShort = CalculateSlippage(exchange.structOrderBook, longSymbol, _config.PositionSize, false);
+            exchange.SummarySlipage = exchange.SlippageLong + exchange.SlippageShort;
+        }
+
+        private double CalculateSummaryTariff(TradeOpportunityModel tradeOpportunity)
+        {
+            var longEchange = _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeLong!.Exchange];
+            var shortEchange = _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeShort!.Exchange];
+            var longMaker = longEchange.spotMarkets.TryGetValue(tradeOpportunity.ExchangeLong!.Symbol, out var longSpotMarket) && longSpotMarket.maker.HasValue ? longSpotMarket.maker.Value : 0;
+            var longExchangeMaker = longMaker > 0.001 ? longMaker * 10 : longMaker * 100;
+            var shortSymbolKey = tradeOpportunity.ExchangeShort!.Symbol.Contains(":USDT") ? tradeOpportunity.ExchangeShort!.Symbol : tradeOpportunity.ExchangeShort!.Symbol + ":USDT";
+            var shortMaker = shortEchange.markets.TryGetValue(shortSymbolKey, out var shortMarket) && shortMarket.maker.HasValue ? shortMarket.maker.Value : 0;
+            var shortExchangeMaker = shortMaker > 0.001 ? shortMaker * 10 : shortMaker * 100;
+            return longExchangeMaker * 2 + shortExchangeMaker * 2;
         }
         public static double CalculateSlippage(ccxt.OrderBook orderBook, string symbol, double orderSize, bool isLong)
         {
             var orderBookEntries = isLong ? orderBook.asks : orderBook.bids;
             if (orderBookEntries == null || orderBookEntries.Count == 0)
-                throw new Exception("Order book is empty!");
+                throw new InvalidOperationException("Order book is empty!");
             double bestPrice = orderBookEntries[0][0];
             double filledAmount = 0;
             double totalCost = 0;
@@ -126,7 +148,7 @@ namespace ArbitrageScanner.Spot.Services
             }
 
             if (filledAmount < orderSize)
-                throw new Exception("Not Enough Liqudidy!");
+                throw new InvalidOperationException("Not Enough Liqudidy!");
 
             double avgFillPrice = totalCost / filledAmount;
             double slippage = (avgFillPrice - bestPrice) / bestPrice * 100;
