@@ -20,6 +20,10 @@
     <PackageReference Include="protobuf-net" Version="3.2.52" />
     <PackageReference Include="Testcontainers.MongoDb" Version="4.13.0" />
     <PackageReference Include="Testcontainers.RabbitMq" Version="4.13.0" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
