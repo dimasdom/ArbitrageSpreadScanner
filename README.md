@@ -1,4 +1,5 @@
 # ArbitrageScanner
+[![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=dimasdom_ArbitrageSpreadScanner)](https://sonarcloud.io/summary/new_code?id=dimasdom_ArbitrageSpreadScanner)
 
 The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 10 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to RabbitMQ for consumption by the Web API and Telegram Notifier.
 
