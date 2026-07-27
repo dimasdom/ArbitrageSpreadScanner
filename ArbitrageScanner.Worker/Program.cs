@@ -11,6 +11,7 @@ using ArbitrageScanner.Funding.Services;
 using ArbitrageScanner.Spot.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Resources;
@@ -48,20 +49,23 @@ var host = Host.CreateDefaultBuilder(args)
             .AddCheck<MongoHealthCheck>("mongo")
             .AddCheck<RabbitMqHealthCheck>("rabbitmq");
 
-        services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService("arbiscanner-arbitrage-scanner", serviceVersion: "1.0.0"))
-            .WithTracing(tracing => tracing
-                .AddHttpClientInstrumentation(o => o.RecordException = true)
-                .AddSource("RabbitMQ.Client.*")
-                .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
-                .AddOtlpExporter())
-            .WithMetrics(metrics => metrics
-                .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation()
-                .AddPrometheusHttpListener(o =>
-                {
-                    o.UriPrefixes = ["http://+:8085/"];
-                }));
+        if (context.Configuration.GetValue("Observability:Enabled", true))
+        {
+            services.AddOpenTelemetry()
+                .ConfigureResource(r => r.AddService("arbiscanner-arbitrage-scanner", serviceVersion: "1.0.0"))
+                .WithTracing(tracing => tracing
+                    .AddHttpClientInstrumentation(o => o.RecordException = true)
+                    .AddSource("RabbitMQ.Client.*")
+                    .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
+                    .AddOtlpExporter())
+                .WithMetrics(metrics => metrics
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation()
+                    .AddPrometheusHttpListener(o =>
+                    {
+                        o.UriPrefixes = ["http://+:8085/"];
+                    }));
+        }
     })
     .ConfigureWebHostDefaults(webBuilder =>
     {
