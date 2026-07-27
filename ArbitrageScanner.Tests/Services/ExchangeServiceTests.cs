@@ -1,7 +1,9 @@
+using ArbitrageScanner.Domain.Interfaces;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Moq;
 using Xunit;
 
 namespace ArbitrageScanner.Tests.Services;
@@ -190,6 +192,41 @@ public class ExchangeServiceTests
     }
 
     [Fact]
+    public async Task GetDataForCoin_ExchangeUnavailableDuringSpotFetch_LogsSpotRequestErrorAndReturnsNull()
+    {
+        var capturedMethods = new List<string?>();
+        var mockRepo = new Mock<ITradeOpportunityRepository>();
+        mockRepo.Setup(r => r.SaveError(It.IsAny<Exception>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Callback<Exception, string?, string?, string?>((ex, symbol, method, exchangeName) => capturedMethods.Add(method))
+            .Returns(Task.CompletedTask);
+        var dataService = new DataService(mockRepo.Object, BuildConfig(spot: true, positionSize: 1));
+        var service = new ExchangeService(dataService, BuildConfig(spot: true, positionSize: 1));
+
+        var fake = new FakeExchange();
+        fake.MarketsProvider = _ => Task.FromResult<object>(new List<object>
+        {
+            FakeExchange.Market("BTC/USDT:USDT", swap: true, spot: false),
+            FakeExchange.Market("BTC/USDT", swap: false, spot: true),
+        });
+        await service.Init(fake);
+        await service.LoadSwapMarkets();
+        await service.LoadSpotMarkets();
+
+        // FetchTicker/FetchOrderBook are themselves async, so an exception thrown from the
+        // exchange gets absorbed into a faulted Task rather than escaping synchronously — the
+        // IsCompletedSuccessfully guards mean that path never reaches this method's own catch.
+        // Clearing the exchange handle right before the spot fetch's synchronous
+        // "exchange!.FetchTicker(...)" dereference is what actually throws synchronously here,
+        // which is what the "GetDataForCoin-SpotRequest" catch exists to handle.
+        service.exchange = null;
+
+        var result = await service.GetDataForCoin("BTC/USDT:USDT");
+
+        result.Should().BeNull();
+        capturedMethods.Should().Contain("GetDataForCoin-SpotRequest");
+    }
+
+    [Fact]
     public async Task GetDataForCoin_LowLiquidity_ReturnsNullWhenCheckEnabled()
     {
         var fake = new FakeExchange();
@@ -254,6 +291,28 @@ public class ExchangeServiceTests
         var fake = new FakeExchange();
         fake.TickerProvider = (s, p) => throw new InvalidOperationException("boom");
         fake.OrderBookProvider = (s, l, p) => Task.FromResult<object>(FakeExchange.OrderBook());
+        var service = await BuildWithSwapMarketLoaded(fake, positionSize: 1);
+
+        var result = await service.GetDataForCoin("BTC/USDT:USDT", onlyFutures: true);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetDataForCoin_MalformedOrderBookEntry_ReturnsNull()
+    {
+        var fake = new FakeExchange();
+        fake.TickerProvider = (s, p) => Task.FromResult<object>(FakeExchange.Ticker((string)s, 100));
+        // Fetch succeeds, so the inner exchange-request catch never fires; instead, a bid
+        // entry missing its volume element throws IndexOutOfRangeException from GetLiquidity
+        // while the result is assembled afterward, which is what this outer try/catch guards.
+        fake.OrderBookProvider = (s, l, p) => Task.FromResult<object>(new Dictionary<string, object?>
+        {
+            ["bids"] = new List<object> { new List<object> { 99.9 } },
+            ["asks"] = new List<object> { new List<object> { 100.1, 1000.0 } },
+            ["timestamp"] = 0L,
+        });
+        fake.FundingRateProvider = (s, p) => Task.FromResult<object>(FakeExchange.FundingRate((string)s, 0.0001));
         var service = await BuildWithSwapMarketLoaded(fake, positionSize: 1);
 
         var result = await service.GetDataForCoin("BTC/USDT:USDT", onlyFutures: true);
