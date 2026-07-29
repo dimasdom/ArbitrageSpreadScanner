@@ -73,6 +73,9 @@ namespace ArbitrageScanner.Worker
         }
         public async Task StartOperation(bool parallel, CancellationToken cancellationToken)
         {
+            await _dataService.LoadProxiesAsync();
+            await _proxyService.SetNextProxy();
+
             foreach (var svc in _dataService.ExchangeServices.Select(x => x.Value))
             {
                 Console.WriteLine($"Start to load swap markets {svc.GetExchangeName()}");
@@ -88,8 +91,6 @@ namespace ArbitrageScanner.Worker
                 await svc.LoadSpotMarkets();
                 Console.WriteLine($"Finished to load swap markets order {svc.GetExchangeName()}");
             }
-            await _dataService.LoadProxiesAsync();
-            await _proxyService.SetNextProxy();
             await _dataService.LoadActivePossiblePositionsAsync();
             _futuresObserverService.StartToWatchPositionsWithCombineKeys(cancellationToken).FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Futures");
             _fundingObserverService.StartToWatchPositionsWithCombineKeys(cancellationToken).FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Funding");
