@@ -57,6 +57,8 @@ jobs:
           /d:sonar.cs.vstest.reportsPaths="TestResults/*.trx"
           /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
           /d:sonar.coverage.exclusions="ArbitrageScanner.Domain/Models/**/*.cs,ArbitrageScanner.Domain/Interfaces/**/*.cs,**/Dto/**/*.cs,**/*Dto.cs,**/*Config.cs,**/*Options.cs"
+          /d:sonar.qualitygate.wait=true
+          /d:sonar.qualitygate.timeout=300
 
       # CodeQL is free for public GitHub repos, no external account/secrets needed.
       - name: Initialize CodeQL
@@ -90,11 +92,7 @@ jobs:
       - name: End SonarCloud analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: >
-          dotnet-sonarscanner end
-          /d:sonar.token="$SONAR_TOKEN"
-          /d:sonar.qualitygate.wait=true
-          /d:sonar.qualitygate.timeout=300
+        run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
