@@ -12,8 +12,10 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Text.Json;
 using System.Reflection.Metadata.Ecma335;
 using ArbitrageScanner.Domain.Interfaces;
+using ArbitrageScanner.Infrastructure.Extensions;
 using ArbitrageScanner.Infrastructure.Repositories;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 namespace ArbitrageScanner.Infrastructure.Services
 {
     public class DataService
@@ -25,11 +27,13 @@ namespace ArbitrageScanner.Infrastructure.Services
         private static readonly StrategyWatchListService _spotWatchListService = new();
         private static readonly ProxyPool _proxyPool = new();
 
-        public DataService(ITradeOpportunityRepository tradeOpportunityRepositoryMongoRepository, IConfiguration configuration)
+        public DataService(ITradeOpportunityRepository tradeOpportunityRepositoryMongoRepository, IConfiguration configuration, ILogger<DataService> logger)
         {
-            var config = configuration.GetSection("Arbitrage").Get<ConfigModel>() ?? new ConfigModel();
+            var config = configuration.GetArbitrageConfig();
             _tradeOpportunityRepositoryMongoRepository = tradeOpportunityRepositoryMongoRepository;
             _exchangeRegistry = new ExchangeRegistry(config.ExchangeList);
+            logger.LogInformation("Arbitrage exchange list resolved from config ({Count}): {ExchangeList}",
+                config.ExchangeList.Count, string.Join(", ", config.ExchangeList));
         }
 
         public ConcurrentDictionary<string, Dictionary<string, MarketInterface>> exchangeMarkets => _exchangeRegistry.ExchangeMarkets;
