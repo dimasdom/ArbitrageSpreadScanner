@@ -7,6 +7,7 @@ using ArbitrageScanner.Spot.Services;
 using ArbitrageScanner.Worker;
 using ArbitrageScanner.Worker.Controllers;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace ArbitrageScanner.Tests.Helpers;
@@ -155,6 +156,7 @@ internal static class ServiceFactory
             BuildSpotObserver(cfg, ds),
             proxy,
             ds,
-            cfg);
+            cfg,
+            NullLogger<ArbitrageService>.Instance);
     }
 }

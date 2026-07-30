@@ -1,6 +1,7 @@
 using ArbitrageScanner.Tests.Helpers;
 using ArbitrageScanner.Worker.Worker;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ArbitrageScanner.Tests.Worker;
@@ -13,7 +14,7 @@ public class ArbitrageWorkerTests
     {
         var dataService = ServiceFactory.BuildDataService();
         var arbitrageService = ServiceFactory.BuildArbitrageService(dataService: dataService);
-        var worker = new ArbitrageWorker(arbitrageService, dataService);
+        var worker = new ArbitrageWorker(arbitrageService, dataService, NullLogger<ArbitrageWorker>.Instance);
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -36,7 +37,7 @@ public class ArbitrageWorkerTests
         var dataService = ServiceFactory.BuildDataService(config);
         await ServiceFactory.RegisterExchangeService(dataService, config, "worker-test-exchange", "BTC/USDT:USDT");
         var arbitrageService = ServiceFactory.BuildArbitrageService(config, dataService);
-        var worker = new ArbitrageWorker(arbitrageService, dataService);
+        var worker = new ArbitrageWorker(arbitrageService, dataService, NullLogger<ArbitrageWorker>.Instance);
 
         var act = async () =>
         {
@@ -56,7 +57,7 @@ public class ArbitrageWorkerTests
         var config = ServiceFactory.BuildConfig();
         var dataService = ServiceFactory.BuildDataService(config);
         var arbitrageService = ServiceFactory.BuildArbitrageService(config, dataService);
-        var worker = new ArbitrageWorker(arbitrageService, dataService);
+        var worker = new ArbitrageWorker(arbitrageService, dataService, NullLogger<ArbitrageWorker>.Instance);
 
         var act = async () =>
         {

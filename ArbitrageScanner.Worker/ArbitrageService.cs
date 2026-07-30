@@ -8,6 +8,7 @@ using ArbitrageScanner.Futures.Services;
 using ArbitrageScanner.Funding.Services;
 using ArbitrageScanner.Spot.Services;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace ArbitrageScanner.Worker
@@ -22,6 +23,7 @@ namespace ArbitrageScanner.Worker
         private readonly IProxyService _proxyService;
         private readonly DataService _dataService;
         private readonly ConfigModel _config;
+        private readonly ILogger<ArbitrageService> _logger;
 
         private readonly SemaphoreSlim semaphore = new SemaphoreSlim(30);
         public static readonly SemaphoreSlim semaphoreWatching = new SemaphoreSlim(20);
@@ -37,7 +39,8 @@ namespace ArbitrageScanner.Worker
             SpotObserverService spotObserverService,
             IProxyService proxyService,
             DataService dataService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ILogger<ArbitrageService> logger)
         {
             _arbitrageStrategyOrchestrator = arbitrageStrategyOrchestrator;
             _futuresObserverService = futuresObserverService;
@@ -46,13 +49,14 @@ namespace ArbitrageScanner.Worker
             _proxyService = proxyService;
             _dataService = dataService;
             _config = configuration.GetArbitrageConfig();
+            _logger = logger;
 
             List<string> exchangeList = _dataService.ExchangeInitList;
             var tasks = exchangeList.Select((exc) =>
             {
                 return Task.Run(async () =>
                 {
-                    Console.WriteLine($"Start to init {exc}");
+                    _logger.LogInformation("Start to init {Exchange}", exc);
                     var exchangeService = new ExchangeService(_dataService, configuration);
                     var inst = ccxt.Exchange.DynamicallyCreateInstance(exc.ToLower());
                     inst.enableRateLimit = true;
@@ -66,7 +70,7 @@ namespace ArbitrageScanner.Worker
                     await exchangeObserverService.Init(observerInst);
                     _dataService.ExchangeObserverServices[exchangeService.GetExchangeName()] = exchangeObserverService;
 
-                    Console.WriteLine($"Finished to init {exc}");
+                    _logger.LogInformation("Finished to init {Exchange}", exc);
                 });
             });
             Task.WaitAll(Task.WhenAll(tasks));
@@ -78,18 +82,18 @@ namespace ArbitrageScanner.Worker
 
             foreach (var svc in _dataService.ExchangeServices.Select(x => x.Value))
             {
-                Console.WriteLine($"Start to load swap markets {svc.GetExchangeName()}");
+                _logger.LogInformation("Start to load swap markets {Exchange}", svc.GetExchangeName());
                 await svc.LoadSwapMarkets();
                 await svc.LoadSpotMarkets();
-                Console.WriteLine($"Finished to load swap markets {svc.GetExchangeName()}");
+                _logger.LogInformation("Finished to load swap markets {Exchange}", svc.GetExchangeName());
             }
 
             foreach (var svc in _dataService.ExchangeObserverServices.Select(x => x.Value))
             {
-                Console.WriteLine($"Start to load swap markets order {svc.GetExchangeName()}");
+                _logger.LogInformation("Start to load swap markets order {Exchange}", svc.GetExchangeName());
                 await svc.LoadSwapMarkets();
                 await svc.LoadSpotMarkets();
-                Console.WriteLine($"Finished to load swap markets order {svc.GetExchangeName()}");
+                _logger.LogInformation("Finished to load swap markets order {Exchange}", svc.GetExchangeName());
             }
             await _dataService.LoadActivePossiblePositionsAsync();
             _futuresObserverService.StartToWatchPositionsWithCombineKeys(cancellationToken).FireAndForgetWithLogging(_dataService, "StartToWatchPositionsWithCombineKeys", exchange: "Futures");
@@ -123,7 +127,7 @@ namespace ArbitrageScanner.Worker
                 catch (Exception ex)
                 {
                     _dataService.LogErrorEntry(ex, method: "StartOperations");
-                    Console.WriteLine($"StartOperations {ex.Message}");
+                    _logger.LogError(ex, "StartOperations failed");
                     await ArbitrageScanner.Infrastructure.Common.TaskExtensions.DelayRetry(TimeSpan.FromSeconds(RetryDelaySeconds), cancellationToken);
                 }
             }
@@ -168,14 +172,14 @@ namespace ArbitrageScanner.Worker
                         await Task.WhenAll(tasks);
                     }
 
-                    Console.WriteLine("READY");
+                    _logger.LogInformation("READY");
                     symbols.Shuffle();
                     timesUpdated++;
                 }
                 catch (Exception ex)
                 {
                     _dataService.LogErrorEntry(ex, method: "StartOperationParallel");
-                    Console.WriteLine($"StartOperationParallel {ex.Message}");
+                    _logger.LogError(ex, "StartOperationParallel failed");
                     await ArbitrageScanner.Infrastructure.Common.TaskExtensions.DelayRetry(TimeSpan.FromSeconds(RetryDelaySeconds), cancellationToken);
                 }
             }
@@ -185,7 +189,7 @@ namespace ArbitrageScanner.Worker
             try
             {
                 await semaphore.WaitAsync(cancellationToken);
-                Console.WriteLine($"Processing {symbol}...");
+                _logger.LogDebug("Processing {Symbol}...", symbol);
                 CoinDataModel coinData = new CoinDataModel
                 {
                     Symbol = symbol,
@@ -200,20 +204,20 @@ namespace ArbitrageScanner.Worker
 
                 if (completedTask == timeoutTask)
                 {
-                    Console.WriteLine($"Timeout: {symbol} took too long and was cancelled.");
+                    _logger.LogWarning("Timeout: {Symbol} took too long and was cancelled.", symbol);
                     return;
                 }
                 coinData.ExchangeRates.AddRange(processingTask.Result.Where(x => x != null).Select(x => x!));
                 await _arbitrageStrategyOrchestrator.General(coinData);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
-                Console.WriteLine($"Timeout: {symbol} took too long and was cancelled.");
+                _logger.LogWarning(ex, "Timeout: {Symbol} took too long and was cancelled.", symbol);
             }
             catch (Exception ex)
             {
                 _dataService.LogErrorEntry(ex, symbol, method: "ProcessSymbol");
-                Console.WriteLine($"Exception while processing  {symbol}: {ex.Message}");
+                _logger.LogError(ex, "Exception while processing {Symbol}", symbol);
             }
             finally
             {

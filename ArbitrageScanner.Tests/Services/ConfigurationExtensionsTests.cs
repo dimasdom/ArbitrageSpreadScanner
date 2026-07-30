@@ -22,6 +22,8 @@ public class ConfigurationExtensionsTests
         Environment.SetEnvironmentVariable("TELEGRAM_CHAT_ID", null);
         Environment.SetEnvironmentVariable("MongoDb_ConnectionString", null);
         Environment.SetEnvironmentVariable("MongoDb_DatabaseName", null);
+        Environment.SetEnvironmentVariable("ARBITRAGE_EXCHANGE_LIST", null);
+        Environment.SetEnvironmentVariable("ARBITRAGE_PROXY_LIST", null);
     }
 
     [Fact]
@@ -56,5 +58,57 @@ public class ConfigurationExtensionsTests
 
         config.TelegramToken.Should().BeNull();
         config.ChatId.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetArbitrageConfig_ExchangeListEnvVarsSet_OverridesConfigValues()
+    {
+        ClearEnvVars();
+        Environment.SetEnvironmentVariable("ARBITRAGE_EXCHANGE_LIST", "Binance, Bybit,MEXC");
+        try
+        {
+            var config = BuildConfig().GetArbitrageConfig();
+
+            config.ExchangeList.Should().Equal("Binance", "Bybit", "MEXC");
+        }
+        finally
+        {
+            ClearEnvVars();
+        }
+    }
+
+    [Fact]
+    public void GetArbitrageConfig_ProxyListEnvVarSet_OverridesConfigValues()
+    {
+        ClearEnvVars();
+        Environment.SetEnvironmentVariable(
+            "ARBITRAGE_PROXY_LIST",
+            """[{"ip":"proxy.example.com","port":1234,"country_code":"CH","username":"user0","password":"pass0"}]""");
+        try
+        {
+            var config = BuildConfig().GetArbitrageConfig();
+
+            config.ProxyList.Should().ContainSingle();
+            config.ProxyList[0].ip.Should().Be("proxy.example.com");
+            config.ProxyList[0].port.Should().Be(1234);
+            config.ProxyList[0].country_code.Should().Be("CH");
+            config.ProxyList[0].username.Should().Be("user0");
+            config.ProxyList[0].password.Should().Be("pass0");
+        }
+        finally
+        {
+            ClearEnvVars();
+        }
+    }
+
+    [Fact]
+    public void GetArbitrageConfig_NoListEnvVarsSet_LeavesListsUntouched()
+    {
+        ClearEnvVars();
+
+        var config = BuildConfig().GetArbitrageConfig();
+
+        config.ExchangeList.Should().BeEmpty();
+        config.ProxyList.Should().BeEmpty();
     }
 }

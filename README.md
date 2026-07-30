@@ -218,8 +218,6 @@ The following exchanges are supported and configurable via `ExchangeList`:
 | LBank | `LBank` |
 | WhiteBit | `WhiteBit` |
 
-Exchanges in `WeakExchangeList` are treated as less reliable venues. The engine may apply stricter liquidity requirements or lower trust weighting for opportunities that include only weak exchanges on one side.
-
 ---
 
 ## Technologies
@@ -276,7 +274,6 @@ Configuration lives in `ArbitrageScanner.Worker/appsettings.json` under the `Arb
     "Funding": true,
     "Spot": true,
     "ExchangeList": ["Binance", "Bybit", "MEXC", ...],
-    "WeakExchangeList": ["KuCoin Futures", "MEXC Global", "LBank", "BingX"],
     "ProxyList": [...]
   }
 }
@@ -295,7 +292,6 @@ Configuration lives in `ArbitrageScanner.Worker/appsettings.json` under the `Arb
 | `Funding` | `bool` | `true` | Enable or disable the funding rate arbitrage strategy entirely. |
 | `Spot` | `bool` | `true` | Enable or disable the spot-futures arbitrage strategy entirely. |
 | `ExchangeList` | `string[]` | see above | List of exchange identifiers to initialise and scan. Must match the ccxt exchange class name used in the infrastructure layer. |
-| `WeakExchangeList` | `string[]` | see above | Subset of exchanges treated as less reliable. Opportunities where a weak exchange is the only counterparty may be filtered or flagged accordingly. |
 | `ProxyList` | `ProxyModel[]` | — | List of HTTP proxies for outbound exchange requests. Each entry requires `ip`, `port`, `username`, `password`, and optionally `country_code`. The proxy pool rotates across entries to avoid rate limiting. |
 
 ---

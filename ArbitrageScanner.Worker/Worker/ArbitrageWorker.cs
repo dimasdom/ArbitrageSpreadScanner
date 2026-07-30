@@ -1,6 +1,7 @@
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Worker;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OfficeOpenXml;
 
 namespace ArbitrageScanner.Worker.Worker
@@ -9,16 +10,18 @@ namespace ArbitrageScanner.Worker.Worker
     {
         private readonly ArbitrageService _arbitrageService;
         private readonly DataService _dataService;
+        private readonly ILogger<ArbitrageWorker> _logger;
 
-        public ArbitrageWorker(ArbitrageService arbitrageService, DataService dataService)
+        public ArbitrageWorker(ArbitrageService arbitrageService, DataService dataService, ILogger<ArbitrageWorker> logger)
         {
             _arbitrageService = arbitrageService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            Console.WriteLine("=== Starting ArbiScanner ===");
+            _logger.LogInformation("=== Starting ArbiScanner ===");
 
             try
             {
@@ -32,7 +35,7 @@ namespace ArbitrageScanner.Worker.Worker
             catch (Exception ex)
             {
                 _dataService.LogErrorEntry(ex, method: "ArbitrageWorker.ExecuteAsync");
-                Console.WriteLine($"Error: {ex.Message} Stack Trace:{ex.StackTrace}");
+                _logger.LogError(ex, "ArbitrageWorker failed");
             }
         }
     }
