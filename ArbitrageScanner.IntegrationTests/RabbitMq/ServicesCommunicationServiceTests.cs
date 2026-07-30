@@ -3,6 +3,7 @@ using ArbitrageScanner.IntegrationTests.Fixtures;
 using ArbitrageScanner.IntegrationTests.Support;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using ProtoBuf;
 using RabbitMQ.Client;
 using ArbitrageScanner.Domain.Models;
@@ -37,7 +38,7 @@ public class ServicesCommunicationServiceTests(RabbitMqTestFixture fixture)
         SetRabbitMqEnvVars();
         try
         {
-            var dataService = new DataService(new NoOpTradeOpportunityRepository(), EmptyConfig());
+            var dataService = new DataService(new NoOpTradeOpportunityRepository(), EmptyConfig(), NullLogger<DataService>.Instance);
             var service = new ServicesCommunicationService(dataService);
             var message = TradeOpportunityModelBuilder.Build();
 
@@ -59,7 +60,7 @@ public class ServicesCommunicationServiceTests(RabbitMqTestFixture fixture)
         SetRabbitMqEnvVars();
         try
         {
-            var dataService = new DataService(new NoOpTradeOpportunityRepository(), EmptyConfig());
+            var dataService = new DataService(new NoOpTradeOpportunityRepository(), EmptyConfig(), NullLogger<DataService>.Instance);
             var service = new ServicesCommunicationService(dataService);
 
             await service.PostPossiblePosition(TradeOpportunityModelBuilder.Build());

@@ -51,7 +51,7 @@ internal static class ServiceFactory
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
         mockRepo.Setup(r => r.SaveError(It.IsAny<Exception>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()));
-        return new DataService(mockRepo.Object, config ?? BuildConfig());
+        return new DataService(mockRepo.Object, config ?? BuildConfig(), NullLogger<DataService>.Instance);
     }
 
     internal static FuturesPositionCalculatorService BuildFuturesCalculator(IConfiguration? config = null, DataService? dataService = null)

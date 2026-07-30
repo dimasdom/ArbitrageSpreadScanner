@@ -3,6 +3,7 @@ using ArbitrageScanner.Infrastructure.Common;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Tests.Helpers;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -15,7 +16,7 @@ public class TaskExtensionsTests
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
         mockRepo.Setup(r => r.SaveError(It.IsAny<Exception>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()));
-        var dataService = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var dataService = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var tcs = new TaskCompletionSource();
 
         tcs.Task.FireAndForgetWithLogging(dataService, "TestMethod", "BTC/USDT", "binance");

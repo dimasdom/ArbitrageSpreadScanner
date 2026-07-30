@@ -3,6 +3,7 @@ using ArbitrageScanner.Domain.Models;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Tests.Helpers;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -15,7 +16,7 @@ public class ProxyServiceTests
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
         mockRepo.Setup(r => r.LoadProxies()).ReturnsAsync(proxies.ToList());
-        var dataService = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var dataService = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         await dataService.LoadProxiesAsync();
         return dataService;
     }

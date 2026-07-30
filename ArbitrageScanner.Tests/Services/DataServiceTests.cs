@@ -3,6 +3,7 @@ using ArbitrageScanner.Domain.Models;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Tests.Helpers;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -36,7 +37,7 @@ public class DataServiceTests
     public void LogErrorEntry_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var ex = new InvalidOperationException("boom");
 
         service.LogErrorEntry(ex, "BTC/USDT", "Method", "binance");
@@ -50,7 +51,7 @@ public class DataServiceTests
         var mockRepo = new Mock<ITradeOpportunityRepository>();
         var proxies = new List<ProxyModel> { new() { ip = "1.2.3.4", port = 8080 } };
         mockRepo.Setup(r => r.LoadProxies()).ReturnsAsync(proxies);
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
 
         await service.LoadProxiesAsync();
 
@@ -68,7 +69,7 @@ public class DataServiceTests
         var ticker = new TradeOpportunityTickerModel(opportunity);
         mockRepo.Setup(r => r.GetActivePossiblePositions())
             .ReturnsAsync(new List<TradeOpportunityTickerModel> { ticker });
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var combineKey = DataService.GenerateCombineKey(new TradeOpportunityModel
         {
             ExchangeRateA = new ExchangeRateModel { Symbol = ticker.Symbol, Exchange = ticker.ExchangeA },
@@ -92,7 +93,7 @@ public class DataServiceTests
     public void GenerateCombineKeyFor_CombinesSymbolAndBothExchanges()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         var key = service.GenerateCombineKeyFor(opportunity);
@@ -104,7 +105,7 @@ public class DataServiceTests
     public async Task AddActivePossiblePositionAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.AddActivePossiblePositionAsync(opportunity);
@@ -116,7 +117,7 @@ public class DataServiceTests
     public async Task DeleteActivePossiblePositionAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.DeleteActivePossiblePositionAsync(opportunity);
@@ -128,7 +129,7 @@ public class DataServiceTests
     public async Task UpdateActivePossiblePositionAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.UpdateActivePossiblePositionAsync(opportunity);
@@ -140,7 +141,7 @@ public class DataServiceTests
     public async Task SaveSpreadsTickerAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.SaveSpreadsTickerAsync(opportunity);
@@ -152,7 +153,7 @@ public class DataServiceTests
     public async Task SaveFoundSpreadAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.SaveFoundSpreadAsync(opportunity);
@@ -164,7 +165,7 @@ public class DataServiceTests
     public async Task SaveFoundFundingSpreadAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.SaveFoundFundingSpreadAsync(opportunity);
@@ -176,7 +177,7 @@ public class DataServiceTests
     public async Task SaveFoundSpotSpreadAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.SaveFoundSpotSpreadAsync(opportunity);
@@ -188,7 +189,7 @@ public class DataServiceTests
     public async Task SaveSpotSpreadsTickerToMongoAsync_DelegatesToRepository()
     {
         var mockRepo = new Mock<ITradeOpportunityRepository>();
-        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig());
+        var service = new DataService(mockRepo.Object, ServiceFactory.BuildConfig(), NullLogger<DataService>.Instance);
         var opportunity = Opportunity();
 
         await service.SaveSpotSpreadsTickerToMongoAsync(opportunity);
@@ -203,7 +204,7 @@ public class DataServiceTests
         Environment.SetEnvironmentVariable("NODE_INDEX", null);
         var mockRepo = new Mock<ITradeOpportunityRepository>();
         var config = ServiceFactory.BuildConfig();
-        var service = new DataService(mockRepo.Object, config);
+        var service = new DataService(mockRepo.Object, config, NullLogger<DataService>.Instance);
 
         var sharedPair = "BTC/USDT:USDT";
         for (var i = 0; i < 5; i++)

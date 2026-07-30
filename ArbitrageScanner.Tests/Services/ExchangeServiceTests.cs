@@ -3,6 +3,7 @@ using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -199,7 +200,7 @@ public class ExchangeServiceTests
         mockRepo.Setup(r => r.SaveError(It.IsAny<Exception>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .Callback<Exception, string?, string?, string?>((ex, symbol, method, exchangeName) => capturedMethods.Add(method))
             .Returns(Task.CompletedTask);
-        var dataService = new DataService(mockRepo.Object, BuildConfig(spot: true, positionSize: 1));
+        var dataService = new DataService(mockRepo.Object, BuildConfig(spot: true, positionSize: 1), NullLogger<DataService>.Instance);
         var service = new ExchangeService(dataService, BuildConfig(spot: true, positionSize: 1));
 
         var fake = new FakeExchange();
