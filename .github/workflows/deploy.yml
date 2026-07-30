@@ -19,7 +19,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: dimasdom/SpreadScanner/.github/workflows/deploy-service.yml@6ab25c064994ffdef9b21cb2ce69569cf6869727 # master
+    uses: dimasdom/SpreadScanner/.github/workflows/deploy-service.yml@d4ef371f295637ead324e75ac766e494288b9308 # master
     with:
       self_checkout_path: ArbitrageScanner
       sonar_project_key: dimasdom_ArbitrageSpreadScanner
