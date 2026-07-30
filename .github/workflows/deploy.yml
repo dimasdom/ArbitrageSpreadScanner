@@ -30,7 +30,7 @@ jobs:
         /d:sonar.coverage.exclusions="ArbitrageScanner.Domain/Models/**/*.cs,ArbitrageScanner.Domain/Interfaces/**/*.cs,**/Dto/**/*.cs,**/*Dto.cs,**/*Config.cs,**/*Options.cs"
       sibling_repos: "[]"
       images: >-
-        [{"name":"arbitrage-scanner","dockerfile":"ArbitrageScanner.Worker/Dockerfile","context":"ArbitrageScanner","needs_root_checkout":false,"build_args":""}]
+        [{"name":"arbitrage-scanner","dockerfile":"ArbitrageScanner/ArbitrageScanner.Worker/Dockerfile","context":"ArbitrageScanner","needs_root_checkout":false,"build_args":""}]
       deploy_services: "arbitrage-scanner"
       image_tag_vars: '{"arbitrage-scanner":"ARBITRAGE_SCANNER_IMAGE_TAG"}'
       dry_run: ${{ inputs.dry_run }}
