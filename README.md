@@ -18,6 +18,7 @@ The core arbitrage detection engine of the ArbiScanner platform. It runs as a .N
   - [Project Layers](#project-layers)
 - [Supported Exchanges](#supported-exchanges)
 - [Technologies](#technologies)
+- [CI/CD](#cicd)
 - [Configuration Reference](#configuration-reference)
 - [Environment Variables](#environment-variables)
 - [Multi-Node Sharding](#multi-node-sharding)
@@ -245,11 +246,31 @@ The following exchanges are supported and configurable via `ExchangeList`:
 
 ---
 
-## Code Quality & CI
+## CI/CD
 
 `.editorconfig` and `Directory.Build.props` enable `AnalysisLevel=latest`/`AnalysisMode=Recommended` with `TreatWarningsAsErrors`. `Directory.Build.props` documents the specific pre-existing warning rule IDs grandfathered in (locale formatting, test-naming conventions, etc.) — nullable-safety warnings are not among them and fail the build if introduced.
 
-`.github/workflows/ci.yml` runs restore → build (with analyzers) → `ArbitrageScanner.Tests` → `ArbitrageScanner.IntegrationTests` on every push. The root monorepo also has `.github/workflows/docker-build.yml`, which builds this service's image alongside the other three.
+This repo has its own GitHub Actions, independent of the monorepo root's Actions tab (it's a separate git remote — see the monorepo root's CI/CD section for how the two relate).
+
+### `ci.yml` — build, test, quality gate
+
+Runs on every push/PR to `main`:
+
+1. `dotnet restore`/`build` on `ArbitrageScanner.sln` with analyzers enabled.
+2. A SonarCloud scan (project `dimasdom_ArbitrageSpreadScanner`) wraps the build and test steps; `sonar.qualitygate.wait=true` fails the job if the quality gate comes back red.
+3. CodeQL (`build-mode: manual`, since the C# build is explicit) analyzes the same build for security issues.
+4. `ArbitrageScanner.Tests` (unit) then `ArbitrageScanner.IntegrationTests` (Testcontainers — spins up real Mongo/RabbitMQ containers on the runner) both run with coverage collection (`XPlat Code Coverage;Format=opencover`) feeding back into the SonarCloud scan.
+5. `.trx` results are published as a check-run summary via `dorny/test-reporter`.
+
+Both SonarCloud and CodeQL are free for this public repo; SonarCloud additionally requires a `SONAR_TOKEN` secret from the project's SonarCloud org.
+
+### `deploy.yml` — manual deploy to the VPS
+
+A `workflow_dispatch`-triggered workflow (optional `dry_run` boolean input) that calls the monorepo root's reusable `deploy-service.yml` (`dimasdom/SpreadScanner/.github/workflows/deploy-service.yml`, pinned to a specific commit SHA) with this repo's specifics: solution file, `ArbitrageScanner.Tests`/`ArbitrageScanner.IntegrationTests` project paths, the SonarCloud coverage exclusions for DTO/config/interface files, and a single image spec (`arbitrage-scanner`, built from `ArbitrageScanner.Worker/Dockerfile`, no sibling repos needed).
+
+End to end: tests + quality gate → build and push `ghcr.io/dimasdom/arbitrage-scanner:latest` / `:sha-<commit>` to GHCR → (unless `dry_run: true`) SSH into the VPS and run `scripts/deploy-remote.sh arbitrage-scanner ARBITRAGE_SCANNER_IMAGE_TAG sha-<commit>` to pull and restart the `arbitrage-scanner` compose service. Requires `SONAR_TOKEN` plus `VPS_HOST`/`VPS_USER`/`VPS_SSH_KEY`/`VPS_SSH_PORT`/`VPS_DEPLOY_PATH` secrets on this repo.
+
+The root monorepo also has `.github/workflows/docker-build.yml`, which builds this service's image alongside the other three on every push/PR to `master`, as a build-breakage smoke check separate from this repo's own CI.
 
 ---
 
