@@ -1,41 +1,33 @@
 name: Deploy
 
-# Manual on-demand deploy: runs unit + integration tests, enforces the SonarCloud
-# quality gate, and only on success builds+pushes the Docker image to GHCR and
-# restarts the arbitrage-scanner container on the VPS. See the reusable workflow
-# (dimasdom/SpreadScanner/.github/workflows/deploy-service.yml) for the full job
-# graph and scripts/deploy-remote.sh for the VPS-side restart/rollback logic.
+# Manual on-demand deploy: pulls the already-built, already-tested image for the
+# chosen version (a release.yml-cut tag such as "v1.4.0", or "latest") from GHCR
+# and restarts the arbitrage-scanner container on the VPS. Does not rebuild or
+# retest - that happens once per release, in release.yml. See the reusable
+# workflow (dimasdom/SpreadScanner/.github/workflows/deploy-service.yml) for the
+# job itself and scripts/deploy-remote.sh for the VPS-side restart/rollback logic.
 
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version/tag to deploy, e.g. "v1.4.0" (see Releases) or "latest"'
+        required: true
+        type: string
       dry_run:
-        description: "Run tests/build/push but skip the VPS deploy step"
+        description: "Resolve inputs but skip the VPS deploy step"
         type: boolean
         default: false
 
 jobs:
   deploy:
-    permissions:
-      contents: read
-      packages: write
-    uses: dimasdom/SpreadScanner/.github/workflows/deploy-service.yml@d4ef371f295637ead324e75ac766e494288b9308 # master
+    uses: dimasdom/SpreadScanner/.github/workflows/deploy-service.yml@be8acb9c9928400f197ba8a5d64535410458b916 # master
     with:
-      self_checkout_path: ArbitrageScanner
-      sonar_project_key: dimasdom_ArbitrageSpreadScanner
-      solution_file: ArbitrageScanner.sln
-      unit_test_project: ArbitrageScanner.Tests/ArbitrageScanner.Tests.csproj
-      integration_test_project: ArbitrageScanner.IntegrationTests/ArbitrageScanner.IntegrationTests.csproj
-      sonar_begin_extra_args: >-
-        /d:sonar.coverage.exclusions="ArbitrageScanner.Domain/Models/**/*.cs,ArbitrageScanner.Domain/Interfaces/**/*.cs,**/Dto/**/*.cs,**/*Dto.cs,**/*Config.cs,**/*Options.cs"
-      sibling_repos: "[]"
-      images: >-
-        [{"name":"arbitrage-scanner","dockerfile":"ArbitrageScanner/ArbitrageScanner.Worker/Dockerfile","context":"ArbitrageScanner","needs_root_checkout":false,"build_args":""}]
+      version: ${{ inputs.version }}
       deploy_services: "arbitrage-scanner"
       image_tag_vars: '{"arbitrage-scanner":"ARBITRAGE_SCANNER_IMAGE_TAG"}'
       dry_run: ${{ inputs.dry_run }}
     secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}

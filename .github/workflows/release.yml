@@ -1,0 +1,48 @@
+name: Release
+
+# Runs only on push to main. release-please parses conventional commits since the
+# last tag and either opens/updates a Release PR (CHANGELOG.md + version bump) or,
+# once that PR is merged, cuts the vX.Y.Z tag + GitHub Release for this merge
+# commit. When a release is actually cut, build-and-push runs in the same job
+# graph (not a separate `release: published`-triggered workflow) because a
+# GITHUB_TOKEN-authored tag/release does not itself trigger new workflow runs -
+# chaining it as a downstream job sidesteps that entirely. See
+# dimasdom/SpreadScanner/.github/workflows/release-service.yml for what that job
+# does, and that repo's deploy.yml for how a cut version actually gets deployed.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          target-branch: main
+
+  build-and-push:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: dimasdom/SpreadScanner/.github/workflows/release-service.yml@be8acb9c9928400f197ba8a5d64535410458b916 # master
+    with:
+      version: ${{ needs.release-please.outputs.tag_name }}
+      self_checkout_path: ArbitrageScanner
+      solution_file: ArbitrageScanner.sln
+      unit_test_project: ArbitrageScanner.Tests/ArbitrageScanner.Tests.csproj
+      integration_test_project: ArbitrageScanner.IntegrationTests/ArbitrageScanner.IntegrationTests.csproj
+      sibling_repos: "[]"
+      images: >-
+        [{"name":"arbitrage-scanner","dockerfile":"ArbitrageScanner/ArbitrageScanner.Worker/Dockerfile","context":"ArbitrageScanner","needs_root_checkout":false,"build_args":""}]
