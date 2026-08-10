@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/dimasdom/ArbitrageSpreadScanner/compare/v1.0.0...v1.0.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **ci:** auto-merge step failed on every release PR ([6f04503](https://github.com/dimasdom/ArbitrageSpreadScanner/commit/6f045033f6e0829ea9c59fa175ec2dc3488aec3d))
+
 ## 1.0.0 (2026-08-10)
 
 
