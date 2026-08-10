@@ -9,6 +9,13 @@ name: Release
 # chaining it as a downstream job sidesteps that entirely. See
 # dimasdom/SpreadScanner/.github/workflows/release-service.yml for what that job
 # does, and that repo's deploy.yml for how a cut version actually gets deployed.
+#
+# Uses secrets.RELEASE_PLEASE_TOKEN (a PAT), not the default GITHUB_TOKEN, for both
+# the release-please-action call and the auto-merge step below: the same loop-
+# prevention rule above also blocks a GITHUB_TOKEN-authored PR from triggering
+# ci.yml and blocks a GITHUB_TOKEN-authored merge from triggering this workflow
+# again (which is what actually cuts the tag) - a PAT-authored PR/merge doesn't
+# have that restriction, so both the CI gate and the auto-tag chain work.
 
 on:
   push:
@@ -27,7 +34,18 @@ jobs:
       - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           target-branch: main
+
+      # branch protection on main requires the ci.yml `build-and-test` check, so
+      # this waits for that to go green on the release PR before merging it.
+      - name: Auto-merge the release PR
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          PR_NUMBER=$(echo '${{ steps.release.outputs.pr }}' | jq -r '.number')
+          gh pr merge --auto --squash "$PR_NUMBER"
 
   build-and-push:
     needs: release-please
