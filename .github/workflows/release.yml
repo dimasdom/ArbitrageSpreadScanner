@@ -43,9 +43,10 @@ jobs:
         if: steps.release.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          RELEASE_PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
-          PR_NUMBER=$(echo '${{ steps.release.outputs.pr }}' | jq -r '.number')
-          gh pr merge --auto --squash "$PR_NUMBER"
+          PR_NUMBER=$(echo "$RELEASE_PR_JSON" | jq -r '.number')
+          gh pr merge --auto --squash --repo "${{ github.repository }}" "$PR_NUMBER"
 
   build-and-push:
     needs: release-please
