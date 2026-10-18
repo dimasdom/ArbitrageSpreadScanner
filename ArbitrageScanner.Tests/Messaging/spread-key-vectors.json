@@ -1,0 +1,9 @@
+[
+  { "name": "futures ccxt swap symbol", "type": "Futures", "exchangeA": "Binance", "exchangeB": "Bybit", "pair": "BTC/USDT:USDT", "expected": "futures:binance:bybit:BTC-USDT.USDT" },
+  { "name": "futures exchanges swapped", "type": "Futures", "exchangeA": "Bybit", "exchangeB": "Binance", "pair": "BTC/USDT:USDT", "expected": "futures:binance:bybit:BTC-USDT.USDT" },
+  { "name": "spot", "type": "Spot", "exchangeA": "Kraken", "exchangeB": "Binance", "pair": "ETH/USDT", "expected": "spot:binance:kraken:ETH-USDT" },
+  { "name": "funding, multi-word exchange, lower-case pair", "type": "Funding", "exchangeA": "Binance USDM", "exchangeB": "OKX", "pair": "btc/usdt:usdt", "expected": "funding:binance-usdm:okx:BTC-USDT.USDT" },
+  { "name": "surrounding and repeated whitespace", "type": "Futures", "exchangeA": "  Gate   IO ", "exchangeB": "MEXC", "pair": " sol/usdt:usdt ", "expected": "futures:gate-io:mexc:SOL-USDT.USDT" },
+  { "name": "separator inside an exchange name", "type": "Spot", "exchangeA": "foo:bar", "exchangeB": "abc", "pair": "ADA/USDT", "expected": "spot:abc:foo.bar:ADA-USDT" },
+  { "name": "same exchange on both sides", "type": "Spot", "exchangeA": "Binance", "exchangeB": "binance", "pair": "DOGE/USDT", "expected": "spot:binance:binance:DOGE-USDT" }
+]
