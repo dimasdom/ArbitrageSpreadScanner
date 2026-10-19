@@ -74,15 +74,15 @@ namespace ArbitrageScanner.Domain.Models
         public string? Symbol { get; set; }
 
         [ProtoMember(15)]
-        public List<OrderLevelModel>? BidsExchangeA;
+        public List<OrderLevelModel>? BidsExchangeA { get; set; }
         [ProtoMember(16)]
 
-        public List<OrderLevelModel>? AsksExchangeA;
+        public List<OrderLevelModel>? AsksExchangeA { get; set; }
         [ProtoMember(17)]
-        public List<OrderLevelModel>? BidsExchangeB;
+        public List<OrderLevelModel>? BidsExchangeB { get; set; }
         [ProtoMember(18)]
 
-        public List<OrderLevelModel>? AsksExchangeB;
+        public List<OrderLevelModel>? AsksExchangeB { get; set; }
         [ProtoMember(19)]
         public DateTime DateTime { get; set; }
 

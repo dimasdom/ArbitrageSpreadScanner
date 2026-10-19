@@ -35,7 +35,7 @@ public class SpotPositionCalculatorServiceTests
     {
         var calc = new SpotPositionCalculatorService(ServiceFactory.BuildConfig(), ServiceFactory.BuildDataService());
 
-        calc.CalculateBasis(markPrice, indexPrice).Should().BeApproximately(expected, 1e-9);
+        SpotPositionCalculatorService.CalculateBasis(markPrice, indexPrice).Should().BeApproximately(expected, 1e-9);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class SpotPositionCalculatorServiceTests
     {
         var calc = new SpotPositionCalculatorService(ServiceFactory.BuildConfig(), ServiceFactory.BuildDataService());
 
-        calc.CalculateSpreadFor(110, 100).Should().BeApproximately(10, 1e-9);
+        SpotPositionCalculatorService.CalculateSpreadFor(110, 100).Should().BeApproximately(10, 1e-9);
     }
 
     [Fact]

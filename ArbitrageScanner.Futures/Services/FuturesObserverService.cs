@@ -125,7 +125,7 @@ namespace ArbitrageScanner.Futures.Services
                 return;
 
             tradeOpportunity.Guid = Guid.NewGuid();
-            _dataService.WatchList.TryAdd(tradeOpportunity.ExchangeRateA!.Symbol, tradeOpportunity);
+            _dataService.WatchList.TryAdd(tradeOpportunity.ExchangeRateA.Symbol, tradeOpportunity);
             await _dataService.AddActivePossiblePositionAsync(tradeOpportunity);
             await _servicesCommunicationService.PostPossiblePosition(tradeOpportunity);
             await _userInterfaceService.PostFoundSpreadToTelegram(tradeOpportunity);

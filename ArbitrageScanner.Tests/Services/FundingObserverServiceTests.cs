@@ -235,7 +235,7 @@ public class FundingObserverServiceTests
     {
         var (service, _, _, _) = BuildObserver();
 
-        var result = service.ParseInterval(interval);
+        var result = FundingObserverService.ParseInterval(interval);
 
         result.Should().Be(TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes));
     }

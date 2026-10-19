@@ -134,17 +134,17 @@ namespace ArbitrageScanner.Funding.Services
         }
         public async Task<TradeOpportunityModel?> WatchPossiblePosition(TradeOpportunityModel tradeOpportunity)
         {
-            var exchangeFundingA = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateA!.Exchange].GetFundingInfo(tradeOpportunity.ExchangeRateA!.Symbol);
-            var exchangeFundingB = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateB!.Exchange].GetFundingInfo(tradeOpportunity.ExchangeRateA!.Symbol);
-            var exchangeRateA = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateA!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeRateA!.Symbol, true, 50, onlyFutures: true);
-            var exchangeRateB = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateB!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeRateA!.Symbol, true, 50, onlyFutures: true);
+            var exchangeFundingA = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateA!.Exchange].GetFundingInfo(tradeOpportunity.ExchangeRateA.Symbol);
+            var exchangeFundingB = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateB!.Exchange].GetFundingInfo(tradeOpportunity.ExchangeRateA.Symbol);
+            var exchangeRateA = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateA.Exchange].GetDataForCoin(tradeOpportunity.ExchangeRateA.Symbol, true, 50, onlyFutures: true);
+            var exchangeRateB = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeRateB.Exchange].GetDataForCoin(tradeOpportunity.ExchangeRateA.Symbol, true, 50, onlyFutures: true);
 
             if (!exchangeFundingA.HasValue || !exchangeFundingB.HasValue
                 || !exchangeFundingA.Value.fundingRate.HasValue || !exchangeFundingB.Value.fundingRate.HasValue
                 || exchangeRateA is null || exchangeRateB is null)
                 return null;
 
-            var spread = _fundingPositionCalculatorService.CalculateFundingFor(exchangeFundingA.Value.fundingRate.Value, exchangeFundingB.Value.fundingRate.Value, out var isLong);
+            var spread = FundingPositionCalculatorService.CalculateFundingFor(exchangeFundingA.Value.fundingRate.Value, exchangeFundingB.Value.fundingRate.Value, out var isLong);
             tradeOpportunity.Spread = spread;
             tradeOpportunity.ExchangeRateA = exchangeRateA;
             tradeOpportunity.ExchangeRateB = exchangeRateB;
@@ -177,9 +177,9 @@ namespace ArbitrageScanner.Funding.Services
             }
             return default;
         }
-        internal TimeSpan ParseInterval(string interval)
+        internal static TimeSpan ParseInterval(string interval)
         {
-            var regex = new Regex(@"((\d+)h)?\s*((\d+)m)?", RegexOptions.IgnoreCase);
+            var regex = new Regex(@"((\d+)h)?\s*((\d+)m)?", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
             var match = regex.Match(interval.Trim());
 
             if (!match.Success)

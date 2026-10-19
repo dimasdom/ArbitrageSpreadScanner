@@ -17,11 +17,11 @@ namespace ArbitrageScanner.Spot.Services
             _dataService = dataService;
         }
 
-        public double CalculateBasis(double markPrice, double indexPrice)
+        public static double CalculateBasis(double markPrice, double indexPrice)
         {
             return (markPrice - indexPrice) / indexPrice * 100;
         }
-        public double CalculateSpreadFor(double priceA, double priceB)
+        public static double CalculateSpreadFor(double priceA, double priceB)
         {
             return (priceA - priceB) / priceB * 100;
         }
@@ -80,9 +80,9 @@ namespace ArbitrageScanner.Spot.Services
             tradeOpportunity.ExchangeLong = exchangeAIsFutures ? tradeOpportunity.ExchangeRateB : tradeOpportunity.ExchangeRateA;
             tradeOpportunity.ExchangeShort = exchangeAIsFutures ? tradeOpportunity.ExchangeRateA : tradeOpportunity.ExchangeRateB;
             tradeOpportunity.ExchangeLong!.ExchangeRate = tradeOpportunity.ExchangeLong!.SpotTicker!.ExchangeRate;
-            tradeOpportunity.ExchangeLong!.structOrderBook = tradeOpportunity.ExchangeLong!.SpotTicker!.structOrderBook;
-            tradeOpportunity.ExchangeLong!.Symbol = tradeOpportunity.ExchangeLong!.Symbol.Replace(":USDT", "");
-            tradeOpportunity.Symbol = tradeOpportunity.ExchangeLong!.Symbol;
+            tradeOpportunity.ExchangeLong.structOrderBook = tradeOpportunity.ExchangeLong.SpotTicker.structOrderBook;
+            tradeOpportunity.ExchangeLong.Symbol = tradeOpportunity.ExchangeLong.Symbol.Replace(":USDT", "");
+            tradeOpportunity.Symbol = tradeOpportunity.ExchangeLong.Symbol;
             return await CalculatePossibleProfit(tradeOpportunity);
         }
 
@@ -92,7 +92,7 @@ namespace ArbitrageScanner.Spot.Services
                 return Task.FromResult<TradeOpportunityModel?>(tradeOpportunity);
 
             var longSymbol = tradeOpportunity.ExchangeLong!.Symbol;
-            ApplySlippageIfOrderBookAvailable(tradeOpportunity.ExchangeLong!, longSymbol);
+            ApplySlippageIfOrderBookAvailable(tradeOpportunity.ExchangeLong, longSymbol);
             ApplySlippageIfOrderBookAvailable(tradeOpportunity.ExchangeShort!, longSymbol);
 
             var summarySlippage = tradeOpportunity.ExchangeLong!.SummarySlipage + tradeOpportunity.ExchangeShort!.SummarySlipage;
@@ -118,9 +118,9 @@ namespace ArbitrageScanner.Spot.Services
         {
             var longEchange = _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeLong!.Exchange];
             var shortEchange = _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeShort!.Exchange];
-            var longMaker = longEchange.spotMarkets.TryGetValue(tradeOpportunity.ExchangeLong!.Symbol, out var longSpotMarket) && longSpotMarket.maker.HasValue ? longSpotMarket.maker.Value : 0;
+            var longMaker = longEchange.spotMarkets.TryGetValue(tradeOpportunity.ExchangeLong.Symbol, out var longSpotMarket) && longSpotMarket.maker.HasValue ? longSpotMarket.maker.Value : 0;
             var longExchangeMaker = longMaker > 0.001 ? longMaker * 10 : longMaker * 100;
-            var shortSymbolKey = tradeOpportunity.ExchangeShort!.Symbol.Contains(":USDT") ? tradeOpportunity.ExchangeShort!.Symbol : tradeOpportunity.ExchangeShort!.Symbol + ":USDT";
+            var shortSymbolKey = tradeOpportunity.ExchangeShort.Symbol.Contains(":USDT") ? tradeOpportunity.ExchangeShort.Symbol : tradeOpportunity.ExchangeShort.Symbol + ":USDT";
             var shortMaker = shortEchange.markets.TryGetValue(shortSymbolKey, out var shortMarket) && shortMarket.maker.HasValue ? shortMarket.maker.Value : 0;
             var shortExchangeMaker = shortMaker > 0.001 ? shortMaker * 10 : shortMaker * 100;
             return longExchangeMaker * 2 + shortExchangeMaker * 2;
@@ -157,17 +157,17 @@ namespace ArbitrageScanner.Spot.Services
 
         public async Task<TradeOpportunityModel?> WatchPossiblePosition(TradeOpportunityModel tradeOpportunity)
         {
-            var exchangeRateLong = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeLong!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeLong!.Symbol, false, 30);
-            var exchangeRateShort = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeShort!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeShort!.Symbol, false, 30);
+            var exchangeRateLong = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeLong!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeLong.Symbol, false, 30);
+            var exchangeRateShort = await _dataService.ExchangeObserverServices[tradeOpportunity.ExchangeShort!.Exchange].GetDataForCoin(tradeOpportunity.ExchangeShort.Symbol, false, 30);
             if (exchangeRateLong is null || exchangeRateShort is null
                 || exchangeRateShort.structOrderBook.bids?.Count == 0
                 || exchangeRateLong.SpotTicker?.structOrderBook.asks?.Count is null or 0)
                 return null;
             double shortBid = exchangeRateShort.structOrderBook.bids![0][0];
-            double longAsk = exchangeRateLong.SpotTicker!.structOrderBook.asks![0][0];
+            double longAsk = exchangeRateLong.SpotTicker.structOrderBook.asks[0][0];
             var spread = CalculateSpreadFor(shortBid, longAsk);
             tradeOpportunity.ExchangeLong = exchangeRateLong;
-            tradeOpportunity.ExchangeLong.structOrderBook = exchangeRateLong.SpotTicker!.structOrderBook;
+            tradeOpportunity.ExchangeLong.structOrderBook = exchangeRateLong.SpotTicker.structOrderBook;
             tradeOpportunity.ExchangeShort = exchangeRateShort;
             tradeOpportunity.ExchangeRateA = exchangeRateLong.Exchange == tradeOpportunity.ExchangeRateA!.Exchange ? exchangeRateLong : exchangeRateShort;
             tradeOpportunity.ExchangeRateB = exchangeRateLong.Exchange == tradeOpportunity.ExchangeRateB!.Exchange ? exchangeRateLong : exchangeRateShort;

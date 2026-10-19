@@ -139,11 +139,7 @@ namespace ArbitrageScanner.Worker
             {
                 try
                 {
-                    if (timesUpdated > 0 && timesUpdated % 10 == 0)
-                    {
-                        var updateTasks = _dataService.ExchangeServices.Values.Select(x => x.UpdatePairs());
-                        await Task.WhenAll(updateTasks);
-                    }
+                    await RefreshPairsIfDueAsync(timesUpdated);
 
                     var tasks = new List<Task>();
                     int symbolCount = 0;
@@ -184,6 +180,16 @@ namespace ArbitrageScanner.Worker
                 }
             }
         }
+
+        private async Task RefreshPairsIfDueAsync(int timesUpdated)
+        {
+            if (timesUpdated > 0 && timesUpdated % 10 == 0)
+            {
+                var updateTasks = _dataService.ExchangeServices.Values.Select(x => x.UpdatePairs());
+                await Task.WhenAll(updateTasks);
+            }
+        }
+
         public async Task ProcessSymbol(string symbol, CancellationToken cancellationToken)
         {
             try
