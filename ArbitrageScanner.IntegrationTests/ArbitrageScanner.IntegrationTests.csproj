@@ -18,10 +18,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <PackageReference Include="MongoDB.Driver" Version="3.10.0" />
-    <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
     <PackageReference Include="protobuf-net" Version="3.2.52" />
     <PackageReference Include="Testcontainers.MongoDb" Version="4.13.0" />
-    <PackageReference Include="Testcontainers.RabbitMq" Version="4.13.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

@@ -56,18 +56,11 @@ try
             services.AddSingleton<ITelegramNotifierService, TelegramNotifierService>();
             services.AddSingleton<IProxyService, ProxyService>();
             services.AddSingleton<UserInterfaceService>();
-            // RabbitMQ -> Kafka migration (see docs/architecture/kafka-migration-plan.md). Defaults keep today's behaviour:
-            // RabbitMQ only. Kafka is registered only when asked for, so a bad Kafka config cannot affect a RabbitMQ-only deployment.
-            services.AddOptions<MessagingPublishOptions>()
-                .Bind(context.Configuration.GetSection(MessagingPublishOptions.SectionName))
-                .Validate(o => o.RabbitMq || o.Kafka, "Messaging:Publish: at least one of RabbitMq / Kafka must be enabled.")
+            services.AddOptions<KafkaOptions>()
+                .Bind(context.Configuration.GetSection(KafkaOptions.SectionName))
+                .Validate(o => !string.IsNullOrWhiteSpace(o.BootstrapServers), "Kafka:BootstrapServers is required.")
                 .ValidateOnStart();
-            if (context.Configuration.GetValue("Messaging:Publish:Kafka", false))
-            {
-                services.Configure<KafkaOptions>(context.Configuration.GetSection(KafkaOptions.SectionName));
-                services.AddSingleton<IKafkaMessageProducer, KafkaMessageProducer>();
-            }
-
+            services.AddSingleton<IKafkaMessageProducer, KafkaMessageProducer>();
             services.AddSingleton<IServicesCommunicationService, ServicesCommunicationService>();
             services.AddTransient<FuturesPositionCalculatorService>();
             services.AddTransient<FundingPositionCalculatorService>();
@@ -79,18 +72,9 @@ try
             services.AddSingleton<ArbitrageService>();
             services.AddHostedService<ArbitrageWorker>();
 
-            var healthChecks = services.AddHealthChecks().AddCheck<MongoHealthCheck>("mongo");
-            var publishRabbitMq = context.Configuration.GetValue("Messaging:Publish:RabbitMq", true);
-            if (publishRabbitMq)
-            {
-                healthChecks.AddCheck<RabbitMqHealthCheck>("rabbitmq");
-            }
-
-            // Kafka only gates health once it is the authoritative path. In shadow mode a Kafka outage must not make the scanner unhealthy.
-            if (!publishRabbitMq && context.Configuration.GetValue("Messaging:Publish:Kafka", false))
-            {
-                healthChecks.AddCheck<KafkaHealthCheck>("kafka");
-            }
+            services.AddHealthChecks()
+                .AddCheck<MongoHealthCheck>("mongo")
+                .AddCheck<KafkaHealthCheck>("kafka");
 
             if (context.Configuration.GetValue("Observability:Enabled", true))
             {
@@ -98,7 +82,6 @@ try
                     .ConfigureResource(r => r.AddService("arbiscanner-arbitrage-scanner", serviceVersion: "1.0.0"))
                     .WithTracing(tracing => tracing
                         .AddHttpClientInstrumentation(o => o.RecordException = true)
-                        .AddSource("RabbitMQ.Client.*")
                         .AddSource(KafkaTelemetry.SourceName)
                         .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
                         .AddOtlpExporter())

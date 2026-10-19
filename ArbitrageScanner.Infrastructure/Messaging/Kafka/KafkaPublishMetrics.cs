@@ -15,5 +15,5 @@ public static class KafkaPublishMetrics
 
     public static readonly Counter<long> Failures = Meter.CreateCounter<long>(
         "arbiscanner.messaging.publish.kafka.failures",
-        description: "Spread events Kafka did not acknowledge. In shadow mode these are swallowed; this counter is how they are seen.");
+        description: "Spread events that could not be published to Kafka (each one also throws into the observer that raised it).");
 }
