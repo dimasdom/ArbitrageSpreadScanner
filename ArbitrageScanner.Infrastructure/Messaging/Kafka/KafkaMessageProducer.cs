@@ -17,6 +17,7 @@ public interface IKafkaMessageProducer
         byte[] value,
         string messageType,
         string? messageId = null,
+        DateTimeOffset? producedAt = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -44,6 +45,7 @@ public sealed class KafkaMessageProducer : IKafkaMessageProducer, IDisposable
         byte[] value,
         string messageType,
         string? messageId = null,
+        DateTimeOffset? producedAt = null,
         CancellationToken cancellationToken = default)
     {
         using var activity = KafkaTelemetry.StartProducer(topic, key);
@@ -55,6 +57,7 @@ public sealed class KafkaMessageProducer : IKafkaMessageProducer, IDisposable
             Key = key,
             Value = value,
             Headers = MessageHeaders.Create(messageType, id, activity),
+            Timestamp = producedAt is { } at ? new Timestamp(at) : Timestamp.Default,
         };
 
         try
