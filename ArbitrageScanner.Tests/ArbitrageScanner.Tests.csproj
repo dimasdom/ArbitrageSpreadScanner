@@ -33,4 +33,10 @@
     <ProjectReference Include="../ArbitrageScanner.Worker/ArbitrageScanner.Worker.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Messaging\spread-key-vectors.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

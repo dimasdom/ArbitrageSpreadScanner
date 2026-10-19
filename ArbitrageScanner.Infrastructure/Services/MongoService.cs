@@ -5,6 +5,8 @@ namespace ArbitrageScanner.Infrastructure.Services
 {
     public class MongoService
     {
+        private const string ActivePossiblePositionsCollection = "ActivePossiblePositions";
+
         private readonly IMongoDatabase _database;
         private readonly FileService? _fileService;
 
@@ -92,12 +94,12 @@ namespace ArbitrageScanner.Infrastructure.Services
 
         public async Task AddActivePossiblePosition(TradeOpportunityTickerModel tradeOpportunity)
         {
-            var collection = _database.GetCollection<TradeOpportunityTickerModel>("ActivePossiblePositions");
+            var collection = _database.GetCollection<TradeOpportunityTickerModel>(ActivePossiblePositionsCollection);
             await collection.InsertOneAsync(tradeOpportunity);
         }
         public async Task UpdatePossiblePosition(TradeOpportunityTickerModel tradeOpportunity)
         {
-            var collection = _database.GetCollection<TradeOpportunityTickerModel>("ActivePossiblePositions");
+            var collection = _database.GetCollection<TradeOpportunityTickerModel>(ActivePossiblePositionsCollection);
             var filter = Builders<TradeOpportunityTickerModel>.Filter.Eq("Guid", tradeOpportunity.Guid.ToString());
             var update = Builders<TradeOpportunityTickerModel>.Update
                 .Set(p => p.RateA, tradeOpportunity.RateA)
@@ -119,13 +121,13 @@ namespace ArbitrageScanner.Infrastructure.Services
         }
         public async Task DeleteActivePossiblePosition(string id)
         {
-            var collection = _database.GetCollection<TradeOpportunityTickerModel>("ActivePossiblePositions");
+            var collection = _database.GetCollection<TradeOpportunityTickerModel>(ActivePossiblePositionsCollection);
             var filter = Builders<TradeOpportunityTickerModel>.Filter.Eq("Guid", id);
             await collection.DeleteOneAsync(filter);
         }
         public async Task<IEnumerable<TradeOpportunityTickerModel>> GetActivePossiblePositions()
         {
-            var collection = _database.GetCollection<TradeOpportunityTickerModel>("ActivePossiblePositions");
+            var collection = _database.GetCollection<TradeOpportunityTickerModel>(ActivePossiblePositionsCollection);
             var allPositions = await collection.Find(Builders<TradeOpportunityTickerModel>.Filter.Empty).ToListAsync();
             return allPositions;
         }

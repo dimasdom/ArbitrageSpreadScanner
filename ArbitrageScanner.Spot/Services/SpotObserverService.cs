@@ -40,7 +40,6 @@ namespace ArbitrageScanner.Spot.Services
         {
             try
             {
-            double spread = model.Spread;
             var updatedPossiblePosition = await _spotPositionCalculatorService.WatchPossiblePosition(model);
             if (updatedPossiblePosition is null)
                 return;

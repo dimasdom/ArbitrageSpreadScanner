@@ -1,7 +1,7 @@
 # ArbitrageScanner
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=dimasdom_ArbitrageSpreadScanner)](https://sonarcloud.io/summary/new_code?id=dimasdom_ArbitrageSpreadScanner)
 
-The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 10 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to RabbitMQ for consumption by the Web API and Telegram Notifier.
+The core arbitrage detection engine of the ArbiScanner platform. It runs as a .NET 10 background worker service that continuously scans 12+ cryptocurrency exchanges for price discrepancies, stores discovered opportunities in MongoDB, and publishes them to Kafka for consumption by the Web API and Telegram Notifier.
 
 
 ---
@@ -54,9 +54,9 @@ The detection loop follows these steps on every cycle:
 
 4. **Strategy calculation.** Each calculator inspects the `CoinDataModel` for its exchange and compares prices, funding rates, or spot-futures relationships across all available venues. When the spread exceeds the configured minimum, a `TradeOpportunityModel` is created and stored in the in-memory watch list (`StrategyWatchListService`).
 
-5. **Observer monitoring.** Three observer services run concurrently and watch open positions. Each tick, every open position's combine key is dispatched to its own fire-and-forget re-check task (bounded by a `SemaphoreSlim(5, 5)`) instead of the loop awaiting the whole watchlist as one batch; a `ConcurrentDictionary<string, byte>` of in-flight keys prevents a position from being scheduled twice while its previous re-check is still running. This means one slow or stuck (exchange, symbol) lookup no longer stalls re-checks of the rest of the watchlist on the next tick. When a spread falls below `KeepWatchingSpread`%, the position is considered closed: the final result is persisted to the MongoDB `SpreadsTicker` collection and a protobuf-serialised `TradeOpportunityModel` is published to the RabbitMQ fanout exchange. If the re-check can't produce a valid result (e.g. a funding rate or ticker fetch failed), the observer leaves the position in the watch list rather than publishing a partially-populated update.
+5. **Observer monitoring.** Three observer services run concurrently and watch open positions. Each tick, every open position's combine key is dispatched to its own fire-and-forget re-check task (bounded by a `SemaphoreSlim(5, 5)`) instead of the loop awaiting the whole watchlist as one batch; a `ConcurrentDictionary<string, byte>` of in-flight keys prevents a position from being scheduled twice while its previous re-check is still running. This means one slow or stuck (exchange, symbol) lookup no longer stalls re-checks of the rest of the watchlist on the next tick. When a spread falls below `KeepWatchingSpread`%, the position is considered closed: the final result is persisted to the MongoDB `SpreadsTicker` collection and a protobuf-serialised `TradeOpportunityModel` is published to the Kafka `spreads` topic (every `Open`, `Update` and `Close` of a spread is published, all with the same key). If the re-check can't produce a valid result (e.g. a funding rate or ticker fetch failed), the observer leaves the position in the watch list rather than publishing a partially-populated update.
 
-6. **Downstream consumption.** The Web API and Telegram Notifier subscribe to RabbitMQ and receive completed opportunity events in real time.
+6. **Downstream consumption.** The Web API and Telegram Notifier consume the Kafka `spreads` topic (consumer groups `webapp-spreads` and `telegram-spreads`) and receive opportunity events in real time.
 
 ---
 
@@ -115,14 +115,14 @@ The pure domain layer. Contains all models and interfaces; has no dependency on 
 - `CoinDataModel` — ticker and order book data for a single (exchange, symbol) snapshot
 - `ConfigModel` — strongly typed representation of the `Arbitrage` configuration section
 - `ExchangeRateModel` — wraps ccxt exchange and market types
-- `TradeOpportunityModel` — the central result type; protobuf-serialisable for RabbitMQ transport
+- `TradeOpportunityModel` — the central result type; protobuf-serialisable for Kafka transport
 - `TradeOpportunityTickerModel`, `FundingTradeOpportunityTickerModel` — strategy-specific ticker variants
 - `LogErrorModel` — structured error record persisted to MongoDB
 - `ProxyModel` — proxy endpoint descriptor
 
 **Interfaces:**
 - `IProxyService` — abstracts the rotating proxy pool
-- `IServicesCommunicationService` — abstracts RabbitMQ publishing
+- `IServicesCommunicationService` — abstracts publishing spread events
 - `ITelegramNotifierService` — abstracts direct Telegram alert delivery
 - `ITradeOpportunityRepository` — abstracts persistence of trade opportunity records
 
@@ -145,14 +145,14 @@ Concrete implementations of all domain interfaces plus supporting services.
 | `ConfigService` | Loads `ConfigModel` from `appsettings.json` with env var overrides |
 | `ProxyService` / `ProxyPool` | Rotating HTTP proxy pool; distributes outbound exchange requests across configured proxies. Reuses one `HttpClientHandler`/`HttpClient` pair per exchange for the process lifetime (via `RotatingWebProxy`) rather than creating a new pair on every rotation — see [Docker](#docker) |
 | `TelegramNotifierService` | Sends alert messages directly via the Telegram Bot HTTP API |
-| `ServicesCommunicationService` | Serialises `TradeOpportunityModel` with protobuf and publishes to a durable RabbitMQ fanout exchange with publisher confirms and a Polly retry policy; declares a `spread_dlx` dead-letter exchange alongside `spread_api`/`spread_telegram` |
+| `ServicesCommunicationService` | Serialises `TradeOpportunityModel` with protobuf and publishes it to the Kafka `spreads` topic through `KafkaMessageProducer` (idempotent, `acks=all`), keyed by `SpreadEventKeys.For(model)` — `{type}:{exchangeLo}:{exchangeHi}:{pair}`, the spread's stable identity, so Open/Update/Close stay in order on one partition. Each event carries a unique `message-id`, `traceparent`, `message-type` and `schema-version` headers. A failed publish is counted (`arbiscanner_messaging_publish_kafka_failures_total`) and thrown to the observer |
 | `UserInterfaceService` | Console logging helper with structured output |
 | `StrategyWatchListService` | Thread-safe `ConcurrentDictionary<string, TradeOpportunityModel>` per strategy type |
 | `ConfigurationExtensions` | `GetArbitrageConfig()` extension on `IConfiguration`; reads env var overrides |
 | `TaskExtensions` | `FireAndForgetWithLogging()` extension for background tasks |
 | `RateLimiter`, `Utils` | Per-exchange rate limiting and collection utilities (shuffle) |
 
-**NuGet packages:** Azure.Storage.Blobs, Enums.NET, EPPlus, Microsoft.Extensions.Configuration.Binder, MongoDB.Driver 3.3, RabbitMQ.Client 7.1
+**NuGet packages:** Azure.Storage.Blobs, Enums.NET, EPPlus, Microsoft.Extensions.Configuration.Binder, MongoDB.Driver 3.3, Confluent.Kafka 2.16
 
 ---
 
@@ -233,16 +233,15 @@ The following exchanges are supported and configurable via `ExchangeList`:
 |---|---|
 | .NET 10 | Runtime and worker host |
 | MongoDB / MongoDB.Driver 3.3 | Persistence for spread results, tickers, errors, positions, and proxies |
-| RabbitMQ / RabbitMQ.Client 7.1 | Message bus for publishing closed trade opportunities to downstream consumers |
-| protobuf-net / Google.Protobuf | Binary serialisation of `TradeOpportunityModel` for efficient RabbitMQ transport |
+| Apache Kafka / Confluent.Kafka 2.16 | Event backbone for publishing spread events (Open / Update / Close) to downstream consumers |
+| protobuf-net / Google.Protobuf | Binary serialisation of `TradeOpportunityModel` for efficient Kafka transport |
 | Microsoft.Extensions.Hosting | `BackgroundService` host, dependency injection, configuration |
 | EPPlus | Excel export support for opportunity data |
 | Azure.Storage.Blobs | Optional blob storage for export artefacts |
-| OpenTelemetry SDK | Distributed tracing (HTTP client, RabbitMQ, MongoDB spans) |
+| OpenTelemetry SDK | Distributed tracing (HTTP client, Kafka publish, MongoDB spans) |
 | OpenTelemetry.Exporter.OpenTelemetryProtocol | OTLP gRPC export of traces to Grafana Tempo |
 | OpenTelemetry.Exporter.Prometheus.HttpListener | Standalone `/metrics` HTTP server on port 8085 for Prometheus scraping |
-| Polly.Core | Retry (exponential backoff + jitter) around RabbitMQ publish and proxy-service HTTP calls |
-| Microsoft.Extensions.Diagnostics.HealthChecks | Mongo/RabbitMQ health checks exposed at `/health` on a minimal web host (port 8090), alongside the existing `/metrics` listener on 8085 |
+| Microsoft.Extensions.Diagnostics.HealthChecks | Mongo/Kafka health checks exposed at `/health` on a minimal web host (port 8090), alongside the existing `/metrics` listener on 8085 |
 
 ---
 
@@ -259,7 +258,7 @@ Runs on every push/PR to `main`:
 1. `dotnet restore`/`build` on `ArbitrageScanner.sln` with analyzers enabled.
 2. A SonarCloud scan (project `dimasdom_ArbitrageSpreadScanner`) wraps the build and test steps; `sonar.qualitygate.wait=true` fails the job if the quality gate comes back red.
 3. CodeQL (`build-mode: manual`, since the C# build is explicit) analyzes the same build for security issues.
-4. `ArbitrageScanner.Tests` (unit) then `ArbitrageScanner.IntegrationTests` (Testcontainers — spins up real Mongo/RabbitMQ containers on the runner) both run with coverage collection (`XPlat Code Coverage;Format=opencover`) feeding back into the SonarCloud scan.
+4. `ArbitrageScanner.Tests` (unit) then `ArbitrageScanner.IntegrationTests` (Testcontainers — spins up real Mongo/Kafka containers on the runner) both run with coverage collection (`XPlat Code Coverage;Format=opencover`) feeding back into the SonarCloud scan.
 5. `.trx` results are published as a check-run summary via `dorny/test-reporter`.
 
 Both SonarCloud and CodeQL are free for this public repo; SonarCloud additionally requires a `SONAR_TOKEN` secret from the project's SonarCloud org.
@@ -325,7 +324,8 @@ Environment variables override the corresponding `appsettings.json` values. Use 
 |---|---|---|
 | `MongoDb_ConnectionString` | Yes | Full MongoDB connection URI (e.g. `mongodb://user:pass@host:27017`). |
 | `MongoDb_DatabaseName` | No | MongoDB database name. Defaults to `SwapArbitrage`. |
-| `RABBITMQ_HOST` | Yes | Hostname or IP of the RabbitMQ broker. Used when constructing the AMQP connection. |
+| `Kafka__BootstrapServers` | Yes | Kafka bootstrap servers (e.g. `kafka:9092`). Defaults to `localhost:9092`. The `spreads` topic must exist (broker auto-creation is off; the monorepo's `kafka-init` job creates it). |
+| `Kafka__SpreadsTopic` | No | Topic spread events are published to. Defaults to `spreads`. |
 | `TELEGRAM_TOKEN` | No | Overrides `Arbitrage.TelegramToken` from appsettings. |
 | `TELEGRAM_CHAT_ID` | No | Overrides `Arbitrage.ChatId` from appsettings. |
 | `OpenTelemetry__Endpoint` | No | OTLP gRPC endpoint for Grafana Tempo (e.g. `http://tempo:4317`). Defaults to `http://localhost:4317` from `appsettings.json`. |
@@ -356,7 +356,7 @@ When `NODE_TOTAL` is set to a value greater than `1`, `ArbitrageService` partiti
 - Node 1 processes symbols at indices `1, N+1, 2N+1, ...`
 - Node k processes symbols at indices `k, N+k, 2N+k, ...`
 
-Each node independently initialises all exchanges and fetches data only for its assigned symbols. All nodes write to the same MongoDB database and publish to the same RabbitMQ exchange, so the downstream consumers see the complete opportunity stream regardless of how many nodes are running.
+Each node independently initialises all exchanges and fetches data only for its assigned symbols. All nodes write to the same MongoDB database and publish to the same Kafka topic, so the downstream consumers see the complete opportunity stream regardless of how many nodes are running.
 
 **Example docker-compose configuration for three nodes:**
 
@@ -368,7 +368,7 @@ services:
       - NODE_TOTAL=3
       - NODE_INDEX=0
       - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
-      - RABBITMQ_HOST=rabbitmq
+      - Kafka__BootstrapServers=kafka:9092
 
   scanner-1:
     image: arbitrage-scanner:latest
@@ -376,7 +376,7 @@ services:
       - NODE_TOTAL=3
       - NODE_INDEX=1
       - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
-      - RABBITMQ_HOST=rabbitmq
+      - Kafka__BootstrapServers=kafka:9092
 
   scanner-2:
     image: arbitrage-scanner:latest
@@ -384,7 +384,7 @@ services:
       - NODE_TOTAL=3
       - NODE_INDEX=2
       - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
-      - RABBITMQ_HOST=rabbitmq
+      - Kafka__BootstrapServers=kafka:9092
 ```
 
 ---
@@ -427,7 +427,7 @@ services:
       - "8086:8085"   # Prometheus metrics scrape endpoint
     environment:
       - MongoDb_ConnectionString=${MONGO_DB_CONNECTION_STRING}
-      - RABBITMQ_HOST=rabbitmq
+      - Kafka__BootstrapServers=kafka:9092
       - OpenTelemetry__Endpoint=http://tempo:4317
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
@@ -435,20 +435,13 @@ services:
       timeout: 5s
       retries: 5
     depends_on:
-      rabbitmq:
+      kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    restart: unless-stopped
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # See docker-compose.yml in this directory for the complete kafka and kafka-init definitions
+  # (single-node KRaft broker, auto-creation off, one-shot topic creation).
 ```
 
 ---
@@ -459,7 +452,7 @@ services:
 
 - .NET 10 SDK
 - MongoDB instance (local or remote)
-- RabbitMQ instance (optional; only required if you need the publishing pipeline; the engine logs errors and continues if RabbitMQ is unavailable)
+- A Kafka broker with the `spreads` topic (needed for the publishing pipeline; if it is unavailable the engine logs each failed publish and carries on scanning)
 
 ### Running
 
@@ -472,7 +465,7 @@ Configuration is loaded from `appsettings.json`. Override any value with environ
 
 ```bash
 export MongoDb_ConnectionString="mongodb://localhost:27017"
-export RABBITMQ_HOST="localhost"
+export Kafka__BootstrapServers="localhost:9092"
 dotnet run
 ```
 
@@ -499,7 +492,7 @@ Two dedicated test projects were added alongside the strategy/observer refactor 
 
 ### ArbitrageScanner.Tests (unit)
 
-Pure unit tests (xUnit + FluentAssertions) covering the calculation and formatting logic shared by the three strategies — no MongoDB, RabbitMQ, or network calls:
+Pure unit tests (xUnit + FluentAssertions) covering the calculation and formatting logic shared by the three strategies — no MongoDB, Kafka, or network calls:
 
 | File | Coverage |
 |---|---|
@@ -519,12 +512,14 @@ dotnet test ArbitrageScanner.Tests/ArbitrageScanner.Tests.csproj
 
 ### ArbitrageScanner.IntegrationTests
 
-Testcontainers-backed tests that exercise the real MongoDB and RabbitMQ integration paths. **Docker must be running locally** — each test class spins up disposable containers via a shared fixture.
+Testcontainers-backed tests that exercise the real MongoDB and Kafka integration paths. **Docker must be running locally** — each test class spins up disposable containers via a shared fixture.
 
 | File | Coverage |
 |---|---|
 | `Mongo/TradeOpportunityRepositoryMongoTests` | Round-trips found spreads, spread tickers, spot spreads/tickers, funding spreads, error logs, and proxy documents through the real Mongo driver against a `Testcontainers.MongoDb` instance |
-| `RabbitMq/SpreadFanoutContractTests` | Publishes a `TradeOpportunityModel` to the fanout exchange and asserts it is delivered to both the `spread_api` and `spread_telegram` queues, and that all protobuf fields round-trip faithfully — guards the exact contract the Web API and Telegram Notifier depend on |
+| `Kafka/KafkaSpreadProducerTests` | Publishes through the real producer to a Testcontainers Kafka broker and asserts the payload and standard headers round-trip, a spread's whole lifecycle stays on one partition in publish order even when long/short flip, and different spreads spread across partitions |
+| `Kafka/KafkaPublishTests` | Drives `ServicesCommunicationService` (what the observers call) end to end: key, message-id, producer timestamp and payload on the topic, a unique id per event, the published counter, and a failed publish throwing and being counted when the broker is unreachable |
+| `HealthChecks/HealthCheckTests` | The Mongo and Kafka health checks against reachable and unreachable targets |
 
 ```bash
 dotnet test ArbitrageScanner.IntegrationTests/ArbitrageScanner.IntegrationTests.csproj
@@ -608,11 +603,13 @@ ArbitrageScanner/
 ├── ArbitrageScanner.IntegrationTests/    # Testcontainers-backed tests — see Testing
 │   ├── Fixtures/
 │   │   ├── MongoTestFixture.cs
-│   │   └── RabbitMqTestFixture.cs
+│   │   └── CollectionDefinitions.cs
 │   ├── Mongo/
 │   │   └── TradeOpportunityRepositoryMongoTests.cs
-│   ├── RabbitMq/
-│   │   └── SpreadFanoutContractTests.cs
+│   ├── Kafka/
+│   │   ├── KafkaProducerTestFixture.cs
+│   │   ├── KafkaSpreadProducerTests.cs
+│   │   └── KafkaPublishTests.cs
 │   └── Support/
 │       ├── Images.cs
 │       └── TradeOpportunityModelBuilder.cs

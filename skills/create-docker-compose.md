@@ -65,14 +65,15 @@ docker compose down -v
 
 ---
 
-## RabbitMQ management UI
+## Kafka
 
-Open http://localhost:15672 — default credentials: `guest` / `guest`
+The broker has no published port. Inspect topics from inside the container, e.g.
+`docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list`.
 
 ---
 
 ## Notes
 
-- `RABBITMQ_HOST=rabbitmq` is set automatically in `docker-compose.yml`; do not change it unless the service name changes.
+- `Kafka__BootstrapServers=kafka:9092` is set automatically in `docker-compose.yml`; do not change it unless the service name changes. The `kafka-init` job creates the `spreads` and `spreads.dlq` topics.
 - `MongoDb_ConnectionString` is read from `.env`; it must point to your CosmosDB or MongoDB instance accessible from the container.
 - The Dockerfile build context is the solution root (`docker-compose.yml` and `ArbitrageBusiness/Dockerfile`). Always run compose commands from the solution root.

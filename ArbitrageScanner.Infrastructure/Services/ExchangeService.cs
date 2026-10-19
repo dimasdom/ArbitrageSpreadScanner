@@ -21,10 +21,10 @@ namespace ArbitrageScanner.Infrastructure.Services
             _config = configuration.GetArbitrageConfig();
         }
 
-        public Exchange? exchange;
+        public Exchange? exchange { get; set; }
         public Dictionary<string, MarketInterface> markets { get; private set; } = new Dictionary<string, MarketInterface>();
         public Dictionary<string, MarketInterface> spotMarkets { get; private set; } = new Dictionary<string, MarketInterface>();
-        public ConcurrentDictionary<string, (Ticker ticker, IOrderBook orderbook)> watchedPairs = new ConcurrentDictionary<string, (Ticker ticker, IOrderBook orderbook)>();
+        public ConcurrentDictionary<string, (Ticker ticker, IOrderBook orderbook)> watchedPairs { get; } = new ConcurrentDictionary<string, (Ticker ticker, IOrderBook orderbook)>();
 
         private const int SpotFetchTimeoutSeconds = 20;
         public string GetExchangeName()
@@ -103,10 +103,10 @@ namespace ArbitrageScanner.Infrastructure.Services
             {
                 var ticker = await exchange!.FetchTicker(symbol);
                 // Use symbol directly — correct for both spot (BTC/USDT) and futures (BTC/USDT:USDT)
-                var orderBook = await exchange!.FetchOrderBook(symbol);
+                var orderBook = await exchange.FetchOrderBook(symbol);
                 ccxt.FundingRate? fundingRate = null;
                 if (markets.ContainsKey(symbol))
-                    fundingRate = await exchange!.FetchFundingRate(symbol);
+                    fundingRate = await exchange.FetchFundingRate(symbol);
                 return (ticker, orderBook, fundingRate);
             }
             catch (Exception ex)
@@ -122,7 +122,7 @@ namespace ArbitrageScanner.Infrastructure.Services
             try
             {
                 var spotTickerTask = exchange!.FetchTicker(spotSymbol);
-                var spotOrderBookTask = exchange!.FetchOrderBook(spotSymbol);
+                var spotOrderBookTask = exchange.FetchOrderBook(spotSymbol);
                 // .ContinueWith(_ => { }) observes any exception from WhenAll so it does not
                 // surface as an UnobservedTaskException when the exchange (e.g. BingX) throws.
                 await Task.WhenAny(

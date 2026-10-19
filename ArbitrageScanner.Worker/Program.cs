@@ -4,6 +4,7 @@ using ArbitrageScanner.Worker.Worker;
 using ArbitrageScanner.Domain.Interfaces;
 using ArbitrageScanner.Infrastructure.Extensions;
 using ArbitrageScanner.Infrastructure.HealthChecks;
+using ArbitrageScanner.Infrastructure.Messaging.Kafka;
 using ArbitrageScanner.Infrastructure.Services;
 using ArbitrageScanner.Infrastructure.Repositories;
 using ArbitrageScanner.Futures.Services;
@@ -55,6 +56,11 @@ try
             services.AddSingleton<ITelegramNotifierService, TelegramNotifierService>();
             services.AddSingleton<IProxyService, ProxyService>();
             services.AddSingleton<UserInterfaceService>();
+            services.AddOptions<KafkaOptions>()
+                .Bind(context.Configuration.GetSection(KafkaOptions.SectionName))
+                .Validate(o => !string.IsNullOrWhiteSpace(o.BootstrapServers), "Kafka:BootstrapServers is required.")
+                .ValidateOnStart();
+            services.AddSingleton<IKafkaMessageProducer, KafkaMessageProducer>();
             services.AddSingleton<IServicesCommunicationService, ServicesCommunicationService>();
             services.AddTransient<FuturesPositionCalculatorService>();
             services.AddTransient<FundingPositionCalculatorService>();
@@ -68,7 +74,7 @@ try
 
             services.AddHealthChecks()
                 .AddCheck<MongoHealthCheck>("mongo")
-                .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+                .AddCheck<KafkaHealthCheck>("kafka");
 
             if (context.Configuration.GetValue("Observability:Enabled", true))
             {
@@ -76,12 +82,13 @@ try
                     .ConfigureResource(r => r.AddService("arbiscanner-arbitrage-scanner", serviceVersion: "1.0.0"))
                     .WithTracing(tracing => tracing
                         .AddHttpClientInstrumentation(o => o.RecordException = true)
-                        .AddSource("RabbitMQ.Client.*")
+                        .AddSource(KafkaTelemetry.SourceName)
                         .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
                         .AddOtlpExporter())
                     .WithMetrics(metrics => metrics
                         .AddHttpClientInstrumentation()
                         .AddRuntimeInstrumentation()
+                        .AddMeter(KafkaPublishMetrics.MeterName)
                         .AddPrometheusHttpListener(o =>
                         {
                             o.UriPrefixes = ["http://+:8085/"];

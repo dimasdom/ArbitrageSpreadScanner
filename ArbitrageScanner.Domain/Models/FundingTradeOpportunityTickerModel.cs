@@ -9,23 +9,23 @@ namespace ArbitrageScanner.Domain.Models
         {
             Guid = tradeOpportunity.Guid;
             Symbol = tradeOpportunity.ExchangeRateA!.Symbol;
-            EchangeA = tradeOpportunity.ExchangeRateA!.Exchange;
+            EchangeA = tradeOpportunity.ExchangeRateA.Exchange;
             ExchangeB = tradeOpportunity.ExchangeRateB!.Exchange;
             ExchangeLong = tradeOpportunity.ExchangeLong!.Exchange;
             ExchangeShort = tradeOpportunity.ExchangeShort!.Exchange;
-            RateA = tradeOpportunity.ExchangeRateA!.ExchangeRate;
-            RateB = tradeOpportunity.ExchangeRateB!.ExchangeRate;
-            VolumeAskA = tradeOpportunity.ExchangeRateA!.VolumeAsk;
-            VolumeBidA = tradeOpportunity.ExchangeRateA!.VolumeBid;
-            VolumeAskB = tradeOpportunity.ExchangeRateB!.VolumeAsk;
-            VolumeBidB = tradeOpportunity.ExchangeRateB!.VolumeBid;
-            SlippageALong = tradeOpportunity.ExchangeRateA!.SlippageLong;
-            SlippageAShort = tradeOpportunity.ExchangeRateA!.SlippageShort;
-            SlippageBLong = tradeOpportunity.ExchangeRateB!.SlippageLong;
-            SlippageBShort = tradeOpportunity.ExchangeRateB!.SlippageShort;
+            RateA = tradeOpportunity.ExchangeRateA.ExchangeRate;
+            RateB = tradeOpportunity.ExchangeRateB.ExchangeRate;
+            VolumeAskA = tradeOpportunity.ExchangeRateA.VolumeAsk;
+            VolumeBidA = tradeOpportunity.ExchangeRateA.VolumeBid;
+            VolumeAskB = tradeOpportunity.ExchangeRateB.VolumeAsk;
+            VolumeBidB = tradeOpportunity.ExchangeRateB.VolumeBid;
+            SlippageALong = tradeOpportunity.ExchangeRateA.SlippageLong;
+            SlippageAShort = tradeOpportunity.ExchangeRateA.SlippageShort;
+            SlippageBLong = tradeOpportunity.ExchangeRateB.SlippageLong;
+            SlippageBShort = tradeOpportunity.ExchangeRateB.SlippageShort;
             PossibleProfit = tradeOpportunity.PossibleProfit;
-            FundingA = tradeOpportunity.ExchangeRateA!.FundingRate.HasValue && tradeOpportunity.ExchangeRateA.FundingRate.Value.fundingRate.HasValue ? tradeOpportunity.ExchangeRateA.FundingRate.Value.fundingRate.Value : 0;
-            FundingB = tradeOpportunity.ExchangeRateB!.FundingRate.HasValue && tradeOpportunity.ExchangeRateB.FundingRate.Value.fundingRate.HasValue ? tradeOpportunity.ExchangeRateB.FundingRate.Value.fundingRate.Value : 0;
+            FundingA = tradeOpportunity.ExchangeRateA.FundingRate.HasValue && tradeOpportunity.ExchangeRateA.FundingRate.Value.fundingRate.HasValue ? tradeOpportunity.ExchangeRateA.FundingRate.Value.fundingRate.Value : 0;
+            FundingB = tradeOpportunity.ExchangeRateB.FundingRate.HasValue && tradeOpportunity.ExchangeRateB.FundingRate.Value.fundingRate.HasValue ? tradeOpportunity.ExchangeRateB.FundingRate.Value.fundingRate.Value : 0;
             DateTime = DateTime.Now;
         }
         [BsonRepresentation(BsonType.String)]

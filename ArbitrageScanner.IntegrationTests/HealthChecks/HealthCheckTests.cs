@@ -1,8 +1,11 @@
 using ArbitrageScanner.Infrastructure.HealthChecks;
+using ArbitrageScanner.Infrastructure.Messaging.Kafka;
 using ArbitrageScanner.IntegrationTests.Fixtures;
+using ArbitrageScanner.IntegrationTests.Kafka;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 namespace ArbitrageScanner.IntegrationTests.HealthChecks;
 
@@ -37,59 +40,24 @@ public class MongoHealthCheckTests(MongoTestFixture fixture)
     }
 }
 
-[Collection(RabbitMqCollection.Name)]
-public class RabbitMqHealthCheckTests(RabbitMqTestFixture fixture)
+public class KafkaHealthCheckTests(KafkaProducerTestFixture fixture) : IClassFixture<KafkaProducerTestFixture>
 {
-    private static void SetRabbitMqEnvVars((string Host, int Port, string Username, string Password) endpoint)
-    {
-        Environment.SetEnvironmentVariable("RABBITMQ_HOST", endpoint.Host);
-        Environment.SetEnvironmentVariable("RABBITMQ_PORT", endpoint.Port.ToString());
-        Environment.SetEnvironmentVariable("RABBITMQ_USERNAME", endpoint.Username);
-        Environment.SetEnvironmentVariable("RABBITMQ_PASSWORD", endpoint.Password);
-    }
+    private static KafkaHealthCheck Check(string bootstrapServers) =>
+        new(Options.Create(new KafkaOptions { BootstrapServers = bootstrapServers }));
 
-    private static void ClearRabbitMqEnvVars()
+    [Fact]
+    public async Task CheckHealthAsync_ReachableKafka_ReturnsHealthy()
     {
-        Environment.SetEnvironmentVariable("RABBITMQ_HOST", null);
-        Environment.SetEnvironmentVariable("RABBITMQ_PORT", null);
-        Environment.SetEnvironmentVariable("RABBITMQ_USERNAME", null);
-        Environment.SetEnvironmentVariable("RABBITMQ_PASSWORD", null);
+        var result = await Check(fixture.BootstrapServers).CheckHealthAsync(new HealthCheckContext());
+
+        result.Status.Should().Be(HealthStatus.Healthy);
     }
 
     [Fact]
-    public async Task CheckHealthAsync_ReachableRabbitMq_ReturnsHealthy()
+    public async Task CheckHealthAsync_UnreachableKafka_ReturnsUnhealthy()
     {
-        SetRabbitMqEnvVars(fixture.BrokerEndpoint);
-        try
-        {
-            var check = new RabbitMqHealthCheck();
+        var result = await Check("127.0.0.1:1").CheckHealthAsync(new HealthCheckContext());
 
-            var result = await check.CheckHealthAsync(new HealthCheckContext());
-
-            result.Status.Should().Be(HealthStatus.Healthy);
-        }
-        finally
-        {
-            ClearRabbitMqEnvVars();
-        }
-    }
-
-    [Fact]
-    public async Task CheckHealthAsync_WrongCredentials_ReturnsUnhealthy()
-    {
-        var endpoint = fixture.BrokerEndpoint;
-        SetRabbitMqEnvVars((endpoint.Host, endpoint.Port, endpoint.Username, "wrong-password"));
-        try
-        {
-            var check = new RabbitMqHealthCheck();
-
-            var result = await check.CheckHealthAsync(new HealthCheckContext());
-
-            result.Status.Should().Be(HealthStatus.Unhealthy);
-        }
-        finally
-        {
-            ClearRabbitMqEnvVars();
-        }
+        result.Status.Should().Be(HealthStatus.Unhealthy);
     }
 }

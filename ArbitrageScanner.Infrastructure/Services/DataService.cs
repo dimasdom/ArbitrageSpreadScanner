@@ -81,9 +81,9 @@ namespace ArbitrageScanner.Infrastructure.Services
             int nodeCount = int.Parse(Environment.GetEnvironmentVariable("NODE_TOTAL") ?? "1");
             int nodeIndex = int.Parse(Environment.GetEnvironmentVariable("NODE_INDEX") ?? "0");
             Dictionary<string, List<string>> pairsPerExchange = new Dictionary<string, List<string>>();
-            foreach (var exchangeService in exchangeServices)
+            foreach (var exchangeService in exchangeServices.Values)
             {
-                pairsPerExchange[exchangeService.Value.GetExchangeName()] = (await exchangeService.Value.LoadSwapPairs()).ToList();
+                pairsPerExchange[exchangeService.GetExchangeName()] = (await exchangeService.LoadSwapPairs()).ToList();
             }
 
             List<string> allPairs = pairsPerExchange.First().Value;

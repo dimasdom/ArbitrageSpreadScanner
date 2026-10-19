@@ -92,7 +92,7 @@ namespace ArbitrageScanner.Infrastructure.Services
                 exchange.httpClient = httpClient;
             }
 
-            exchange.httpClient!.DefaultRequestHeaders.UserAgent.Clear();
+            exchange.httpClient.DefaultRequestHeaders.UserAgent.Clear();
             exchange.httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(GetRandomUserAgent());
         }
 
